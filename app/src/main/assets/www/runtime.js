@@ -77,7 +77,7 @@
     patchChildren(o, n);
   }
   function patchChildren(oldP, newP) {
-    var olds = kids(oldP), news = kids(newP), pool = {}, used = [];
+    var olds = kids(oldP), news = kids(newP), pool = {}, used = [], nodes = [];
     olds.forEach(function (n) { var k = keyOf(n); (pool[k] = pool[k] || []).push(n); });
     news.forEach(function (nn) {
       var k = keyOf(nn), arr = pool[k], m = null;
@@ -87,12 +87,21 @@
           if (pool[kk].length && pool[kk][0].nodeName === nn.nodeName) { m = pool[kk].shift(); break; }
         }
       }
-      if (m) { patchNode(m, nn); used.push(m); oldP.appendChild(m); }
-      else oldP.appendChild(nn.cloneNode(true));
+      if (m) { patchNode(m, nn); used.push(m); }
+      else m = nn.cloneNode(true);
+      nodes.push(m);
     });
     olds.forEach(function (o) {
       if (used.indexOf(o) < 0 && o.parentNode === oldP) oldP.removeChild(o);
     });
+    /* 只在成员/顺序真的变化时才挪动节点。无条件 appendChild 会把已在文档中的
+       节点 detach 再 attach，浏览器随之重置 CSS transition 与 animation ——
+       挂一飞球因此从起点直接跳到太极位（「闪现」），日晕也反复从头重播。 */
+    var cur = kids(oldP);
+    var same = cur.length === nodes.length &&
+      nodes.every(function (n, i) { return cur[i] === n; });
+    if (same) return;
+    nodes.forEach(function (n) { oldP.appendChild(n); });
   }
   function fromHTML(html) {
     var d = document.createElement('div'); d.innerHTML = html; return d;
