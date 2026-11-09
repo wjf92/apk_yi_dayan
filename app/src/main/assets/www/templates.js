@@ -1,0 +1,392 @@
+window.__T["pages/index/index"] = function (d) {
+  with (d) {
+    var __h0 = "";
+    __h0 += "<div" + " class=\""+"page"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"hero"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"hero-title serif"+"\"" + ">";
+    __h0 += "大衍占筮";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"hero-sub"+"\"" + ">";
+    __h0 += "刘君祖《易断全书》筮法 · 数字化";
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"illu"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"fly-ball"+"\"" + ">";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"fly-arrow"+"\"" + ">";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"mini-field"+"\"" + ">";
+    __h0 += __each(balls, function(item, idx){ var __h1 = "";
+    __h1 += "<div" + " class=\""+"ball"+"\""+" style=\""+"left:"+__E(__rpx(item.x))+";top:"+__E(__rpx(item.y))+";width:"+__E(__rpx(ballSize))+";height:"+__E(__rpx(ballSize))+"\""+" data-wxk=\""+__E((item && item["id"] != null) ? item["id"] : idx)+"\"" + ">";
+    __h1 += "</div>";
+    return __h1; });
+    __h0 += "</div>";
+    __h0 += "<span" + " class=\""+"illu-cap"+"\"" + ">";
+    __h0 += "大衍之数五十，其用四十有九 · 拈出一枚不用";
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"ritual-card"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"ritual-line"+"\"" + ">";
+    __h0 += "请闭目凝神";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"ritual-strong serif"+"\"" + ">";
+    __h0 += "心念所问之事";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"ritual-line"+"\"" + ">";
+    __h0 += "而后起卦";
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"tips"+"\"" + ">";
+    __h0 += "分二由你亲手划线，挂一由程序代行";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"tips sub"+"\"" + ">";
+    __h0 += "太极既定：首爻八步，其后每爻七步 · 每步须你亲自推进";
+    __h0 += "</div>";
+    __h0 += "<button" + " class=\""+"btn"+"\""+" data-ev=\""+"tap:startDivine"+"\"" + ">";
+    __h0 += "开 始 起 卦";
+    __h0 += "</button>";
+    __h0 += "<button" + " class=\""+"btn ghost"+"\""+" data-ev=\""+"tap:goHistory"+"\"" + ">";
+    __h0 += "查 看 历 史";
+    __h0 += "</button>";
+    __h0 += "</div>";
+    return __h0;
+  }
+};
+window.__T["pages/divine/divine"] = function (d) {
+  with (d) {
+    var __h0 = "";
+    __h0 += "<div" + " class=\""+"page dpage"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"dhead"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"dh-t serif"+"\"" + ">";
+    __h0 += "大衍占筮";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"dh-m"+"\"" + ">";
+    __h0 += __E(metaText);
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"record"+"\"" + ">";
+    __h0 += __each(yaoDots, function(item, idx){ var __h1 = "";
+    __h1 += "<div" + " class=\""+"rec "+__E(item.cls)+"\""+" data-wxk=\""+__E((item && item["k"] != null) ? item["k"] : idx)+"\"" + ">";
+    __h1 += "<span" + " class=\""+"rec-k"+"\"" + ">";
+    __h1 += __E(item.k);
+    __h1 += "</span>";
+    __h1 += "<div" + " class=\""+"rec-v"+"\"" + ">";
+    __h1 += __E(item.v);
+    __h1 += "</div>";
+    if (item.bian) {
+    __h1 += "<span" + " class=\""+"rec-b"+"\"" + ">";
+    __h1 += "变";
+    __h1 += "</span>";
+    }
+    __h1 += "</div>";
+    return __h1; });
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"taiji "+__E(taijiOn ? 'on' : '')+"\"" + ">";
+    __h0 += "<div" + " class=\""+"tj-ring"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"tj-ball"+"\"" + ">";
+    __h0 += "</div>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"tj-txt"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"tj-t"+"\"" + ">";
+    __h0 += __E(taijiOn ? '挂 1 策 · 太 极' : '五 十 策 列 席');
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"tj-n"+"\"" + ">";
+    __h0 += __E(taijiOn ? '起筮取一，虚一不用 · 十八变皆不参与' : '太极未立 · 点「下一步」自席上拈出一策');
+    __h0 += "</div>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"tj-tag"+"\"" + ">";
+    __h0 += __E(taijiOn ? '不 动' : '待 拈');
+    __h0 += "</div>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"dbody"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"cwrap"+"\""+" style=\""+"width:"+__E(dia)+"px;height:"+__E(dia)+"px"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"pile-tag"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"pile-cap"+"\"" + ">";
+    __h0 += "在 席";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"pile-n serif"+"\"" + ">";
+    __h0 += __E(pileCount);
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"pile-u"+"\"" + ">";
+    __h0 += "策";
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"circl"+"\""+" id=\""+"ballField"+"\""+" style=\""+"width:"+__E(dia)+"px;height:"+__E(dia)+"px"+"\""+" data-ev=\""+"touchstart:onTouchStart;touchmove!:onTouchMove;touchend:onTouchEnd"+"\"" + ">";
+    __h0 += __each(balls, function(item, idx){ var __h2 = "";
+    __h2 += "<div" + " class=\""+"ball "+__E(item.cls)+"\""+" style=\""+"left:"+__E(item.x)+"px;top:"+__E(item.y)+"px;width:"+__E(ballSize)+"px;height:"+__E(ballSize)+"px;transition-duration:"+__E(item.d)+"ms;transition-delay:"+__E(item.dl)+"ms;animation-delay:"+__E(item.ad)+"ms"+"\""+" data-wxk=\""+__E((item && item["id"] != null) ? item["id"] : idx)+"\"" + ">";
+    __h2 += "</div>";
+    return __h2; });
+    __h0 += "<canvas" + " type=\""+"2d"+"\""+" id=\""+"ink"+"\""+" class=\""+"ink"+"\""+" style=\""+"width:"+__E(dia)+"px;height:"+__E(dia)+"px"+"\""+" data-ev=\""+"touchstart:onTouchStart;touchmove!:onTouchMove;touchend:onTouchEnd"+"\""+" data-keep=\"1\"" + ">";
+    __h0 += "</canvas>";
+    __h0 += "<div" + " class=\""+"dtag dtag-l "+__E(splitDone ? 'on' : '')+"\"" + ">";
+    __h0 += "左 ";
+    __h0 += "<span" + " class=\""+"dtag-b"+"\"" + ">";
+    __h0 += __E(leftCount);
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"dtag dtag-r "+__E(splitDone ? 'on' : '')+"\"" + ">";
+    __h0 += "右 ";
+    __h0 += "<span" + " class=\""+"dtag-b"+"\"" + ">";
+    __h0 += __E(rightCount);
+    __h0 += "</span>";
+    __h0 += " · 挂 1";
+    __h0 += "</div>";
+    if (stepKey === 'yao') {
+    __h0 += "<div" + " class=\""+"yao-calc"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"yc-cap"+"\"" + ">";
+    __h0 += "三 变 余 策";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"yc-eq"+"\"" + ">";
+    __h0 += __E(yaoRemain)+" ÷ 4 ＝";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"yc-num serif"+"\"" + ">";
+    __h0 += __E(yaoNum);
+    __h0 += "</span>";
+    __h0 += "<div" + " class=\""+"yao-line "+__E(yaoYang ? 'yang' : 'yin')+"\"" + ">";
+    __h0 += "</div>";
+    __h0 += "</div>";
+    }
+    __h0 += "</div>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"pillars"+"\"" + ">";
+    __h0 += __each(pillars, function(item, idx){ var __h3 = "";
+    __h3 += "<div" + " class=\""+"pil"+"\""+" data-wxk=\""+__E((item && item["lab"] != null) ? item["lab"] : idx)+"\"" + ">";
+    __h3 += "<span" + " class=\""+"pil-lab"+"\"" + ">";
+    __h3 += __E(item.lab);
+    __h3 += "</span>";
+    __h3 += "<span" + " class=\""+"pil-num"+"\""+" style=\""+"color:"+__E(item.c)+"\"" + ">";
+    __h3 += __E(item.val);
+    __h3 += "</span>";
+    __h3 += "<div" + " class=\""+"pil-dots"+"\"" + ">";
+    __h3 += __each(item.dots, function(d, idx){ var __h4 = "";
+    __h4 += "<div" + " class=\""+"bdot "+__E(item.done ? 'out' : 'g')+" "+__E(d.gap ? 'gap' : '')+"\""+" data-wxk=\""+__E((d && d["i"] != null) ? d["i"] : idx)+"\"" + ">";
+    __h4 += "</div>";
+    return __h4; });
+    __h3 += "</div>";
+    __h3 += "</div>";
+    return __h3; });
+    __h0 += "</div>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"stpname"+"\"" + ">";
+    __h0 += __E(stepName);
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"steps"+"\"" + ">";
+    __h0 += __each(rails, function(item, idx){ var __h5 = "";
+    __h5 += "<div" + " class=\""+"stp "+__E(item.cls)+"\"" + ">";
+    __h5 += __E(item.n);
+    __h5 += "</div>";
+    if (item.line) {
+    __h5 += "<div" + " class=\""+"stp-line "+__E(item.lineCls)+"\"" + ">";
+    __h5 += "</div>";
+    }
+    return __h5; });
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"dbot"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"dhint"+"\"" + ">";
+    __h0 += __E(hint);
+    __h0 += "</span>";
+    if (chips.length) {
+    __h0 += "<div" + " class=\""+"chips"+"\"" + ">";
+    __h0 += __each(chips, function(item, idx){ var __h6 = "";
+    __h6 += "<div" + " class=\""+"chip "+__E(item.dark ? 'dark-chip' : '')+" "+__E(item.sum ? 'sum' : '')+"\""+" data-wxk=\""+__E((item && item["t"] != null) ? item["t"] : idx)+"\"" + ">";
+    __h6 += __E(item.t);
+    __h6 += "</div>";
+    return __h6; });
+    __h0 += "</div>";
+    }
+    if (stepKey === 'count') {
+    __h0 += "<div" + " class=\""+"formula"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"f-cap"+"\"" + ">";
+    __h0 += "本 变 余 策";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"f-eq"+"\"" + ">";
+    __h0 += __E(formulaText);
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"f-note"+"\"" + ">";
+    __h0 += __E(formulaNote);
+    __h0 += "</span>";
+    __h0 += "</div>";
+    }
+    __h0 += "<button" + " class=\""+"btn "+__E(btnWait ? 'wait' : '')+"\""+" data-ev=\""+"tap:onNext"+"\"" + ">";
+    __h0 += __E(btnText);
+    __h0 += "</button>";
+    if (stepKey === 'hang') {
+    __h0 += "<div" + " class=\""+"lock"+"\"" + ">";
+    __h0 += "此步不可跳过 —— 须你亲自点「下一步」，太极之策方自席上拈出";
+    __h0 += "</div>";
+    }
+    if (stepKey === 'split' && splitDone) {
+    __h0 += "<div" + " class=\""+"relink"+"\""+" data-ev=\""+"tap:onRedraw"+"\"" + ">";
+    __h0 += "重新划线";
+    __h0 += "</div>";
+    }
+    __h0 += "</div>";
+    __h0 += __each(fly, function(item, idx){ var __h7 = "";
+    __h7 += "<div" + " class=\""+"flyball "+__E(item.land ? 'land' : '')+"\""+" style=\""+"left:"+__E(item.x)+"px;top:"+__E(item.y)+"px;width:"+__E(item.size)+"px;height:"+__E(item.size)+"px;transform:translate("+__E(item.tx)+"px,"+__E(item.ty)+"px) scale("+__E(item.sc)+");transition-duration:"+__E(item.d)+"ms;transition-delay:"+__E(item.dl)+"ms"+"\""+" data-wxk=\""+__E((item && item["id"] != null) ? item["id"] : idx)+"\"" + ">";
+    __h7 += "</div>";
+    return __h7; });
+    __h0 += "</div>";
+    return __h0;
+  }
+};
+window.__T["pages/result/result"] = function (d) {
+  with (d) {
+    var __h0 = "";
+    __h0 += "<div" + " class=\""+"page"+"\"" + ">";
+    if (ready) {
+    __h0 += "<div" + " class=\""+"sec-title serif"+"\"" + ">";
+    __h0 += "卦象生成";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"rule"+"\"" + ">";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"hex"+"\"" + ">";
+    __h0 += __each(lines, function(item, idx){ var __h1 = "";
+    __h1 += "<div" + " class=\""+"hex-line"+"\""+" data-wxk=\""+__E((item && item["label"] != null) ? item["label"] : idx)+"\"" + ">";
+    __h1 += "<span" + " class=\""+"hex-label"+"\"" + ">";
+    __h1 += __E(item.label);
+    __h1 += "</span>";
+    __h1 += "<div" + " class=\""+"hex-bars"+"\"" + ">";
+    if (item.yang) {
+    __h1 += "<div" + " class=\""+"bar "+__E(item.changing ? 'changing' : '')+"\"" + ">";
+    __h1 += "</div>";
+    }
+    __h1 += "<div" + " class=\""+"yin"+"\"" + ">";
+    __h1 += "<div" + " class=\""+"bar half "+__E(item.changing ? 'changing' : '')+"\"" + ">";
+    __h1 += "</div>";
+    __h1 += "<div" + " class=\""+"bar half "+__E(item.changing ? 'changing' : '')+"\"" + ">";
+    __h1 += "</div>";
+    __h1 += "</div>";
+    __h1 += "</div>";
+    __h1 += "<span" + " class=\""+"hex-val"+"\"" + ">";
+    __h1 += __E(item.valueText);
+    __h1 += "</span>";
+    __h1 += "</div>";
+    return __h1; });
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"hex-head"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"seal serif"+"\"" + ">";
+    __h0 += __E(shortName);
+    __h0 += "</div>";
+    __h0 += "<span" + " class=\""+"hex-name serif"+"\"" + ">";
+    __h0 += __E(hexName);
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"trigrams"+"\"" + ">";
+    __h0 += __E(upper)+" · "+__E(lower);
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"juan"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"juan-label"+"\"" + ">";
+    __h0 += "卦辞";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"juan-text serif"+"\"" + ">";
+    __h0 += __E(judgment);
+    __h0 += "</span>";
+    __h0 += "</div>";
+    if (hasChange) {
+    __h0 += "<div" + " class=\""+"change-card"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"change-title"+"\"" + ">";
+    __h0 += "变爻："+__E(changeText);
+    __h0 += "</span>";
+    __h0 += "<div" + " class=\""+"change-to"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"change-to-label"+"\"" + ">";
+    __h0 += "之卦";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"change-to-name serif"+"\"" + ">";
+    __h0 += __E(changedName);
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<span" + " class=\""+"change-judge serif"+"\"" + ">";
+    __h0 += __E(changedJudgment);
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"change-tip"+"\"" + ">";
+    __h0 += "有变爻时，兼看本卦与之卦，以变爻爻辞为断。";
+    __h0 += "</span>";
+    __h0 += "</div>";
+    }
+    __h0 += "<div" + " class=\""+"change-card"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"change-title"+"\"" + ">";
+    __h0 += "六爻皆不变";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"change-tip"+"\"" + ">";
+    __h0 += "之卦即本卦，依本卦卦辞为断。";
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"time-line"+"\"" + ">";
+    __h0 += __E(timeText);
+    __h0 += "</div>";
+    if (!saved) {
+    __h0 += "<button" + " class=\""+"btn"+"\""+" data-ev=\""+"tap:onSave"+"\"" + ">";
+    __h0 += "保 存 占 例";
+    __h0 += "</button>";
+    }
+    __h0 += "<button" + " class=\""+"btn ghost"+"\""+" data-ev=\""+"tap:onRestart"+"\"" + ">";
+    __h0 += "重 新 起 卦";
+    __h0 += "</button>";
+    __h0 += "<button" + " class=\""+"btn ghost"+"\""+" data-ev=\""+"tap:onHistory"+"\"" + ">";
+    __h0 += "查 看 历 史";
+    __h0 += "</button>";
+    }
+    __h0 += "</div>";
+    return __h0;
+  }
+};
+window.__T["pages/history/history"] = function (d) {
+  with (d) {
+    var __h0 = "";
+    __h0 += "<div" + " class=\""+"page"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"sec-title serif"+"\"" + ">";
+    __h0 += "占 例";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"rule"+"\"" + ">";
+    __h0 += "</div>";
+    if (empty) {
+    __h0 += "<div" + " class=\""+"empty"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"empty-icon"+"\"" + ">";
+    __h0 += "○";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"empty-title"+"\"" + ">";
+    __h0 += "尚无占例";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"empty-desc"+"\"" + ">";
+    __h0 += "起一卦并保存后，可在此回看";
+    __h0 += "</span>";
+    __h0 += "<button" + " class=\""+"btn"+"\""+" data-ev=\""+"tap:onBack"+"\"" + ">";
+    __h0 += "开 始 起 卦";
+    __h0 += "</button>";
+    __h0 += "</div>";
+    }
+    __h0 += __each(list, function(item, idx){ var __h1 = "";
+    __h1 += "<div" + " class=\""+"item"+"\""+" data-id=\""+__E(item.id)+"\""+" data-ev=\""+"tap:onOpen;longpress:onDelete"+"\""+" data-wxk=\""+__E((item && item["id"] != null) ? item["id"] : idx)+"\"" + ">";
+    __h1 += "<div" + " class=\""+"item-main"+"\"" + ">";
+    __h1 += "<span" + " class=\""+"item-name serif"+"\"" + ">";
+    __h1 += __E(item.name);
+    __h1 += "</span>";
+    if (item.changedName) {
+    __h1 += "<span" + " class=\""+"item-sub"+"\"" + ">";
+    __h1 += "之卦 "+__E(item.changedName);
+    __h1 += "</span>";
+    }
+    __h1 += "<span" + " class=\""+"item-sub"+"\"" + ">";
+    __h1 += "六爻不变";
+    __h1 += "</span>";
+    __h1 += "</div>";
+    __h1 += "<div" + " class=\""+"item-side"+"\"" + ">";
+    __h1 += "<div" + " class=\""+"seal-sm serif"+"\"" + ">";
+    __h1 += __E(item.shortName);
+    __h1 += "</div>";
+    __h1 += "<span" + " class=\""+"item-time"+"\"" + ">";
+    __h1 += __E(item.timeText);
+    __h1 += "</span>";
+    __h1 += "</div>";
+    __h1 += "</div>";
+    return __h1; });
+    __h0 += "<div" + " class=\""+"img-note"+"\"" + ">";
+    __h0 += "点击查看详情 · 长按删除";
+    __h0 += "</div>";
+    __h0 += "<button" + " class=\""+"btn ghost"+"\""+" data-ev=\""+"tap:onBack"+"\"" + ">";
+    __h0 += "返 回 首 页";
+    __h0 += "</button>";
+    __h0 += "</div>";
+    return __h0;
+  }
+};

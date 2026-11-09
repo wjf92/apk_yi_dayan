@@ -1,0 +1,2435 @@
+/* 由 tools/convert.py 生成：模块定义 + 页面注册 + 启动 */
+window.__ROUTES = ["pages/index/index","pages/divine/divine","pages/result/result","pages/history/history"];
+__def('app.js', function(module, exports, require){
+App({
+  globalData: {
+    pendingSession: null
+  },
+  onLaunch: function () {}
+});
+
+});
+__def('utils/dayan.js', function(module, exports, require){
+// utils/dayan.js —— 大衍筮法内核（纯函数，无副作用）
+// 依据：《易断全书·占卜玄机》大衍之术
+// 一变：分二 → 挂一（右堆取一） → 右堆揲四归奇 r1 → 左堆揲四归奇 r2 → 剩余 N-1-r1-r2
+
+const hexagrams = require('./hexagrams.js');
+
+const YAO_INFO = {
+  6: { name: '老阴', symbol: '⚋', yang: false, changing: true },
+  7: { name: '少阳', symbol: '⚊', yang: true, changing: false },
+  8: { name: '少阴', symbol: '⚋', yang: false, changing: false },
+  9: { name: '老阳', symbol: '⚊', yang: true, changing: true }
+};
+
+// 揲四余数：整除时记 4（非 0）
+function remainder4(n) {
+  const r = n % 4;
+  return r === 0 ? 4 : r;
+}
+
+// 单变演算
+function change(total, leftCount) {
+  const totalNum = Number(total) || 0;
+  const left = Number(leftCount) || 0;
+  const right = totalNum - left;
+  if (left < 1 || right < 1) {
+    return { error: 'INVALID_SPLIT' };
+  }
+  const hung = 1;
+  const rightAfterHang = right - hung;
+  const r1 = remainder4(rightAfterHang);
+  const r2 = remainder4(left);
+  const next = totalNum - hung - r1 - r2;
+  return {
+    total: totalNum,
+    left: left,
+    right: right,
+    hung: hung,
+    rightAfterHang: rightAfterHang,
+    r1: r1,
+    r2: r2,
+    next: next
+  };
+}
+
+// 三变后剩余 24/28/32/36 → 6/7/8/9
+function yaoValue(remain) {
+  const v = remain / 4;
+  return (v === 6 || v === 7 || v === 8 || v === 9) ? v : 0;
+}
+
+function yaoInfo(v) {
+  return YAO_INFO[v] || YAO_INFO[7];
+}
+
+// 揲四分组：返回 { groups: 组数, rem: 余数(1~4) }
+function groupsOf(count) {
+  const rem = remainder4(count);
+  return { groups: (count - rem) / 4, rem: rem };
+}
+
+// 非重叠散布：最小中心距 = 直径 + 间隙，随机取点并做碰撞检测
+function layoutBalls(count, width, height, size, gap) {
+  const minD = size + gap;
+  const pts = [];
+  let tries = 0;
+  const limit = count * 900;
+  const maxX = Math.max(width - size, 0);
+  const maxY = Math.max(height - size, 0);
+  while (pts.length < count && tries < limit) {
+    tries++;
+    const x = Math.random() * maxX;
+    const y = Math.random() * maxY;
+    let ok = true;
+    for (let i = 0; i < pts.length; i++) {
+      const dx = pts[i].x - x;
+      const dy = pts[i].y - y;
+      if (dx * dx + dy * dy < minD * minD) { ok = false; break; }
+    }
+    if (ok) pts.push({ x: x, y: y });
+  }
+  return pts;
+}
+
+// 圆内非重叠散布：返回左上角坐标
+// side: 0 = 全部 / 1 = 左半 / 2 = 右半
+function layoutInCircle(count, diameter, size, gap, side) {
+  const cx = diameter / 2;
+  const cy = diameter / 2;
+  const Rmax = Math.max(cx - 7 - size / 2, 4);
+  const D = size + gap;
+  const pts = [];
+  let tries = 0;
+  const limit = count * 2500;
+  while (pts.length < count && tries < limit) {
+    tries++;
+    const a = Math.random() * Math.PI * 2;
+    const rr = Math.sqrt(Math.random()) * Rmax;
+    const bx = cx + Math.cos(a) * rr;
+    const by = cy + Math.sin(a) * rr;
+    if (side === 1 && bx > cx - 11) continue;
+    if (side === 2 && bx < cx + 11) continue;
+    let ok = true;
+    for (let i = 0; i < pts.length; i++) {
+      const dx = pts[i].x - bx;
+      const dy = pts[i].y - by;
+      if (dx * dx + dy * dy < D * D) { ok = false; break; }
+    }
+    if (ok) pts.push({ x: bx, y: by });
+  }
+  return pts.map(function (p) {
+    return { x: p.x - size / 2, y: p.y - size / 2 };
+  });
+}
+
+// 圆内均匀铺球：向日葵螺旋（密度按面积均分）+ 松弛（互不重叠）+ 微抖动
+// 与 layoutInCircle 的纯随机散布相比，不会出现「一坨一撮、旁边一个大空当」
+function layoutEven(count, diameter, size, gap) {
+  const cx = diameter / 2;
+  const cy = diameter / 2;
+  const Rmax = Math.max(cx - 8 - size / 2, 4);
+  const D = size + gap;
+  const N = Math.max(1, count | 0);
+  const rot = Math.random() * Math.PI * 2;
+  const golden = Math.PI * (3 - Math.sqrt(5));   // 黄金角 137.5°
+  const pts = [];
+
+  for (let i = 0; i < N; i++) {
+    const r = Rmax * Math.sqrt((i + 0.42) / N);
+    const a = rot + i * golden;
+    pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+  }
+
+  /* 松弛：把过近的两颗推开，越出圆边的拉回；密度已由螺旋保证 */
+  for (let it = 0; it < 120; it++) {
+    let moved = 0;
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        let dx = pts[j].x - pts[i].x;
+        let dy = pts[j].y - pts[i].y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= D * D) continue;
+        let d = Math.sqrt(d2);
+        if (d < 0.001) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d = Math.sqrt(dx * dx + dy * dy) || 1; }
+        const push = (D - d) * 0.3;
+        const ux = dx / d;
+        const uy = dy / d;
+        pts[i].x -= ux * push; pts[i].y -= uy * push;
+        pts[j].x += ux * push; pts[j].y += uy * push;
+        moved++;
+      }
+    }
+    if (moved) {
+      for (let i = 0; i < N; i++) {
+        const dx = pts[i].x - cx;
+        const dy = pts[i].y - cy;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > Rmax) { pts[i].x = cx + dx / d * Rmax; pts[i].y = cy + dy / d * Rmax; }
+      }
+    } else {
+      break;
+    }
+  }
+
+  /* 微抖动：别让人看出是阵列 */
+  const jit = Math.min(D * 0.12, 3.2);
+  for (let i = 0; i < N; i++) {
+    pts[i].x += (Math.random() - 0.5) * jit;
+    pts[i].y += (Math.random() - 0.5) * jit;
+  }
+
+  return pts.map(function (p) {
+    return { x: p.x - size / 2, y: p.y - size / 2 };
+  });
+}
+
+// 把用户画的那一笔两端沿切线延长到圆席之外
+//
+// 占者画的是「分界的示意」，一笔停下来没画到最下排球，并不代表分界不存在 ——
+// 只要这一笔的方向明确，它的延长线照样把圆席切成两半。旧版要求「线的首尾必须
+// 盖过最上一排与最下一排球心」，斜着画时线常常先从圆席侧边出界（截图即此），
+// 于是被判成「最下面 N 策落在线外」而重画 —— 这正是要改的地方。
+//
+// 返回 { pts: 有序折线（含两端延长点）, segs: 两条延长段的端点，供画虚线提示 }
+function extendSplit(samples, W, H) {
+  const sorted = samples.slice().sort(function (a, b) { return a.y - b.y; });
+  const n = sorted.length;
+  if (n < 2) return { pts: sorted, segs: [] };
+
+  const Wd = W || 1000, Hd = H || 1000;
+  const loX = -0.02 * Wd, hiX = 1.02 * Wd, loY = -0.02 * Hd, hiY = 1.02 * Hd;
+
+  /* 方向：由内指向外（用内侧第 4 个点定方向，比首两点稳，手抖不至于歪） */
+  function outward(pOut, pIn) {
+    const dx = pOut.x - pIn.x, dy = pOut.y - pIn.y;
+    const L = Math.sqrt(dx * dx + dy * dy);
+    if (L < 1e-6) return null;
+    return { x: dx / L, y: dy / L };
+  }
+  /* 从 p 沿 d 打到外接矩形边界 */
+  function toEdge(p, d) {
+    let t = Infinity;
+    if (d.x > 1e-6) t = Math.min(t, (hiX - p.x) / d.x);
+    if (d.x < -1e-6) t = Math.min(t, (loX - p.x) / d.x);
+    if (d.y > 1e-6) t = Math.min(t, (hiY - p.y) / d.y);
+    if (d.y < -1e-6) t = Math.min(t, (loY - p.y) / d.y);
+    if (!isFinite(t) || t < 0) t = 0;
+    const cap = 2 * Math.max(Wd, Hd);
+    if (t > cap) t = cap;
+    return { x: p.x + d.x * t, y: p.y + d.y * t };
+  }
+
+  const pts = sorted.slice();
+  const segs = [];
+  const minSeg = 0.05 * Math.max(Wd, Hd);      // 太短的延长段不画，省得线上多出小尾巴
+  const dH = outward(sorted[0], sorted[Math.min(3, n - 1)]);
+  const dT = outward(sorted[n - 1], sorted[Math.max(0, n - 4)]);
+
+  if (dH) {
+    const q = toEdge(sorted[0], dH);
+    if (q.y < sorted[0].y - 1) {
+      pts.unshift(q);
+      if (sorted[0].y - q.y > minSeg) {
+        segs.push({ x1: q.x, y1: q.y, x2: sorted[0].x, y2: sorted[0].y });
+      }
+    }
+  }
+  if (dT) {
+    const q = toEdge(sorted[n - 1], dT);
+    if (q.y > sorted[n - 1].y + 1) {
+      pts.push(q);
+      if (q.y - sorted[n - 1].y > minSeg) {
+        segs.push({ x1: sorted[n - 1].x, y1: sorted[n - 1].y, x2: q.x, y2: q.y });
+      }
+    }
+  }
+  return { pts: pts, segs: segs };
+}
+
+// 按用户画的曲线把球分到左右两侧
+// samples: [{x, y}]；W/H 为圆席尺寸，用于把线延长到界外（缺省时按点云包围盒兜底）
+//
+// 归属判据只看「球心」：球是圆的，线从球阵中间穿过时必然要从某些球身上压过去
+// （实测每副平均 4~5 颗球的球心距线不足一个半径），所以不能用「整颗球在线的哪侧」判，
+// 那样每副都有一堆球说不清。球心落在线上（|dx| ≤ 0.30R）的这几颗记进 edge，
+// 由页面用朱红虚环标出来，让占者看得见「它是按球心算的」。
+// dx === 0 归右：判据是严格小于归左，浮点下几乎不会真的取等，仅作书面约定。
+function splitByCurve(balls, samples, size, W, H) {
+  if (!samples || samples.length < 2) {
+    return null;
+  }
+  const half = (size || 0) / 2;
+  const ext = extendSplit(samples, W, H);
+  const sorted = ext.pts;                 // 两端已延长，故所有球的 y 都落在范围内
+  const xs = sorted.map(function (p) { return p.x; }).sort(function (a, b) { return a - b; });
+  const midX = xs[Math.floor(xs.length / 2)];
+
+  function boundaryAt(y) {
+    if (y <= sorted[0].y) return sorted[0].x;
+    const last = sorted[sorted.length - 1];
+    if (y >= last.y) return last.x;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const a = sorted[i];
+      const b = sorted[i + 1];
+      if (y >= a.y && y <= b.y) {
+        const t = b.y === a.y ? 0 : (y - a.y) / (b.y - a.y);
+        return a.x + (b.x - a.x) * t;
+      }
+    }
+    return last.x;
+  }
+
+  let left = 0;
+  const edge = [];                        // 球心压在线上（0.30R 以内）的球
+  const edgeTol = half * 0.30;
+  const sides = balls.map(function (b, i) {
+    const bx = boundaryAt(b.y + half);
+    const dx = (b.x + half) - bx;         // <0 在左，>0 在右，=0 压在线上
+    if (Math.abs(dx) <= edgeTol) edge.push(i);
+    if (dx < 0) { left++; return 1; }
+    return 2;
+  });
+
+  // 极端情况兜底：一侧为空则按中位线分
+  if (left === 0 || left === balls.length) {
+    let l = 0;
+    const fallback = balls.map(function (b) {
+      if (b.x + half < midX) { l++; return 1; }
+      return 2;
+    });
+    return { sides: fallback, left: l, right: balls.length - l, fallback: true, edge: [], ext: ext.segs };
+  }
+  return { sides: sides, left: left, right: balls.length - left, fallback: false, edge: edge, ext: ext.segs };
+}
+
+// 点到折线的最短距离
+function distToPolyline(p, pts) {
+  let best = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const L2 = dx * dx + dy * dy;
+    let t = L2 > 0 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2 : 0;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    const qx = a.x + dx * t;
+    const qy = a.y + dy * t;
+    const d = Math.sqrt((p.x - qx) * (p.x - qx) + (p.y - qy) * (p.y - qy));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+// 划线是否「有话可讲」：笔势要成一个方向、不能回折，且不能横着画
+// 返回 { ok, code }：
+//   short —— 线太短（不足两个球径），画不出分界
+//   flat  —— 近乎水平，判据是按高度取分界点，横线没有高度可言
+//   back  —— 中途往回折，同一高度出现两个分界点，左右说不清
+//   ok    —— 可以分堆
+// 注意：不再判「线必须盖过上下两排球心」——两端会延长（extendSplit）。
+function checkSplit(balls, samples, size) {
+  if (!samples || samples.length < 2) return { ok: false, code: 'short' };
+  const half = (size || 0) / 2;
+
+  let top = Infinity, bot = -Infinity;
+  for (let i = 0; i < balls.length; i++) {
+    const cy = balls[i].y + half;
+    if (cy < top) top = cy;
+    if (cy > bot) bot = cy;
+  }
+
+  /* 一、短：这一笔还没画出一个方向，延长也没意义 */
+  let len = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const dx = samples[i].x - samples[i - 1].x;
+    const dy = samples[i].y - samples[i - 1].y;
+    len += Math.sqrt(dx * dx + dy * dy);
+  }
+  if (len < (size || 0) * 2.2) return { ok: false, code: 'short' };
+
+  /* 二、横：判定是「按高度取分界点的 x」，近乎水平的一笔没有高度可言。
+     只要这一笔有明显的上下走向（y 跨度 ≥ 球阵高度三成），斜着画也行。 */
+  let minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < samples.length; i++) {
+    if (samples[i].y < minY) minY = samples[i].y;
+    if (samples[i].y > maxY) maxY = samples[i].y;
+  }
+  if (maxY - minY < (bot - top) * 0.30) return { ok: false, code: 'flat' };
+
+  /* 三、回折：逆着运笔方向倒退超过 1.5 个球径，说明画回来了（同一 y 会有两个分界点）
+     注意：不再要求「线的首尾必须盖过最上一排与最下一排球心」——
+     两端会沿切线延长到圆席之外（extendSplit），延长线照样把圆席切开。
+     旧版的 span 判据会把「斜着画、先从侧边出界」的正常一笔判成废话，
+     截图里那句「最下面 6 策落在线外」就是这么来的。 */
+  const dir = samples[samples.length - 1].y >= samples[0].y ? 1 : -1;   // 自下而上画也算数
+  let run = 0, worst = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const dy = (samples[i].y - samples[i - 1].y) * dir;
+    if (dy < 0) {
+      run += -dy;
+      if (run > worst) worst = run;
+    } else {
+      run = 0;
+    }
+  }
+  if (worst > (size || 0) * 1.5) return { ok: false, code: 'back' };
+
+  return { ok: true };
+}
+
+// 组装一次完整占例
+function buildSession(values) {
+  const hex = hexagrams.buildHexagram(values);
+  const change = hexagrams.hasChange(values);
+  const changed = change ? hexagrams.buildHexagram(hexagrams.changedValues(values)) : null;
+  return {
+    values: values.slice(),
+    hex: hex,
+    changed: changed,
+    changeLabels: hexagrams.changeLabels(values),
+    hasChange: change
+  };
+}
+
+module.exports = {
+  YAO_INFO: YAO_INFO,
+  remainder4: remainder4,
+  change: change,
+  yaoValue: yaoValue,
+  yaoInfo: yaoInfo,
+  groupsOf: groupsOf,
+  layoutBalls: layoutBalls,
+  layoutInCircle: layoutInCircle,
+  layoutEven: layoutEven,
+  splitByCurve: splitByCurve,
+  extendSplit: extendSplit,
+  distToPolyline: distToPolyline,
+  checkSplit: checkSplit,
+  buildSession: buildSession
+};
+
+});
+__def('utils/hexagrams.js', function(module, exports, require){
+// utils/hexagrams.js —— 六十四卦查表（通行本）
+// 卦由下而上：下卦 = 初二三爻，上卦 = 四五六爻
+// 三爻位序均为「自下而上」
+
+const TRIGRAM_BY_BITS = {
+  '111': '乾',
+  '110': '兑',
+  '101': '离',
+  '100': '震',
+  '011': '巽',
+  '010': '坎',
+  '001': '艮',
+  '000': '坤'
+};
+
+const TRIGRAM_SYMBOL = {
+  乾: '☰',
+  兑: '☱',
+  离: '☲',
+  震: '☳',
+  巽: '☴',
+  坎: '☵',
+  艮: '☶',
+  坤: '☷'
+};
+
+// TABLE[上卦][下卦] = 卦序
+const TABLE = {
+  乾: { 乾: 1, 兑: 10, 离: 13, 震: 25, 巽: 44, 坎: 6, 艮: 33, 坤: 12 },
+  兑: { 乾: 43, 兑: 58, 离: 49, 震: 17, 巽: 28, 坎: 47, 艮: 31, 坤: 45 },
+  离: { 乾: 14, 兑: 38, 离: 30, 震: 21, 巽: 50, 坎: 64, 艮: 56, 坤: 35 },
+  震: { 乾: 34, 兑: 54, 离: 55, 震: 51, 巽: 32, 坎: 40, 艮: 62, 坤: 16 },
+  巽: { 乾: 9, 兑: 61, 离: 37, 震: 42, 巽: 57, 坎: 59, 艮: 53, 坤: 20 },
+  坎: { 乾: 5, 兑: 60, 离: 63, 震: 3, 巽: 48, 坎: 29, 艮: 39, 坤: 8 },
+  艮: { 乾: 26, 兑: 41, 离: 22, 震: 27, 巽: 18, 坎: 4, 艮: 52, 坤: 23 },
+  坤: { 乾: 11, 兑: 19, 离: 36, 震: 24, 巽: 46, 坎: 7, 艮: 15, 坤: 2 }
+};
+
+const NAMES = {
+  1: '乾为天', 2: '坤为地', 3: '水雷屯', 4: '山水蒙',
+  5: '水天需', 6: '天水讼', 7: '地水师', 8: '水地比',
+  9: '风天小畜', 10: '天泽履', 11: '地天泰', 12: '天地否',
+  13: '天火同人', 14: '火天大有', 15: '地山谦', 16: '雷地豫',
+  17: '泽雷随', 18: '山风蛊', 19: '地泽临', 20: '风地观',
+  21: '火雷噬嗑', 22: '山火贲', 23: '山地剥', 24: '地雷复',
+  25: '天雷无妄', 26: '山天大畜', 27: '山雷颐', 28: '泽风大过',
+  29: '坎为水', 30: '离为火', 31: '泽山咸', 32: '雷风恒',
+  33: '天山遁', 34: '雷天大壮', 35: '火地晋', 36: '地火明夷',
+  37: '风火家人', 38: '火泽睽', 39: '水山蹇', 40: '雷水解',
+  41: '山泽损', 42: '风雷益', 43: '泽天夬', 44: '天风姤',
+  45: '泽地萃', 46: '地风升', 47: '泽水困', 48: '水风井',
+  49: '泽火革', 50: '火风鼎', 51: '震为雷', 52: '艮为山',
+  53: '风山渐', 54: '雷泽归妹', 55: '雷火丰', 56: '火山旅',
+  57: '巽为风', 58: '兑为泽', 59: '风水涣', 60: '水泽节',
+  61: '风泽中孚', 62: '雷山小过', 63: '水火既济', 64: '火水未济'
+};
+
+const JUDGMENTS = {
+  1: '元亨利贞。',
+  2: '元亨，利牝马之贞。君子有攸往，先迷后得主，利。西南得朋，东北丧朋。安贞吉。',
+  3: '元亨利贞。勿用有攸往，利建侯。',
+  4: '亨。匪我求童蒙，童蒙求我。初筮告，再三渎，渎则不告。利贞。',
+  5: '有孚，光亨，贞吉。利涉大川。',
+  6: '有孚，窒惕，中吉，终凶。利见大人，不利涉大川。',
+  7: '贞，丈人吉，无咎。',
+  8: '吉。原筮，元永贞，无咎。不宁方来，后夫凶。',
+  9: '亨。密云不雨，自我西郊。',
+  10: '履虎尾，不咥人，亨。',
+  11: '小往大来，吉亨。',
+  12: '否之匪人，不利君子贞，大往小来。',
+  13: '同人于野，亨。利涉大川，利君子贞。',
+  14: '元亨。',
+  15: '亨，君子有终。',
+  16: '利建侯行师。',
+  17: '元亨利贞，无咎。',
+  18: '元亨，利涉大川。先甲三日，后甲三日。',
+  19: '元亨利贞。至于八月有凶。',
+  20: '盥而不荐，有孚颙若。',
+  21: '亨。利用狱。',
+  22: '亨。小利有攸往。',
+  23: '不利有攸往。',
+  24: '亨。出入无疾，朋来无咎。反复其道，七日来复。利有攸往。',
+  25: '元亨利贞。其匪正有眚，不利有攸往。',
+  26: '利贞。不家食吉，利涉大川。',
+  27: '贞吉。观颐，自求口实。',
+  28: '栋桡。利有攸往，亨。',
+  29: '习坎，有孚，维心亨，行有尚。',
+  30: '利贞，亨。畜牝牛，吉。',
+  31: '亨，利贞。取女吉。',
+  32: '亨，无咎，利贞，利有攸往。',
+  33: '亨，小利贞。',
+  34: '利贞。',
+  35: '康侯用锡马蕃庶，昼日三接。',
+  36: '利艰贞。',
+  37: '利女贞。',
+  38: '小事吉。',
+  39: '利西南，不利东北。利见大人，贞吉。',
+  40: '利西南。无所往，其来复吉。有攸往，夙吉。',
+  41: '有孚，元吉，无咎，可贞，利有攸往。曷之用？二簋可用享。',
+  42: '利有攸往，利涉大川。',
+  43: '扬于王庭，孚号有厉。告自邑，不利即戎。利有攸往。',
+  44: '女壮，勿用取女。',
+  45: '亨。王假有庙。利见大人，亨，利贞。用大牲吉。利有攸往。',
+  46: '元亨。用见大人，勿恤。南征吉。',
+  47: '亨，贞，大人吉，无咎。有言不信。',
+  48: '改邑不改井，无丧无得，往来井井。汔至亦未繘井，羸其瓶，凶。',
+  49: '己日乃孚。元亨利贞，悔亡。',
+  50: '元吉，亨。',
+  51: '亨。震来虩虩，笑言哑哑。震惊百里，不丧匕鬯。',
+  52: '艮其背，不获其身；行其庭，不见其人。无咎。',
+  53: '女归吉，利贞。',
+  54: '征凶，无攸利。',
+  55: '亨，王假之。勿忧，宜日中。',
+  56: '小亨，旅贞吉。',
+  57: '小亨。利有攸往，利见大人。',
+  58: '亨，利贞。',
+  59: '亨。王假有庙，利涉大川，利贞。',
+  60: '亨。苦节不可贞。',
+  61: '豚鱼吉。利涉大川，利贞。',
+  62: '亨，利贞。可小事，不可大事。飞鸟遗之音，不宜上，宜下，大吉。',
+  63: '亨小，利贞。初吉终乱。',
+  64: '亨。小狐汔济，濡其尾，无攸利。'
+};
+
+const YAO_LABELS = ['初', '二', '三', '四', '五', '上'];
+
+// 由六个爻值（初→上，6/7/8/9）得出卦体
+function buildHexagram(values) {
+  const bits = values.map(function (v) {
+    return (v === 7 || v === 9) ? 1 : 0;
+  });
+  const lowerBits = bits.slice(0, 3).join('');
+  const upperBits = bits.slice(3, 6).join('');
+  const lower = TRIGRAM_BY_BITS[lowerBits];
+  const upper = TRIGRAM_BY_BITS[upperBits];
+  const no = TABLE[upper][lower];
+  return {
+    no: no,
+    name: NAMES[no],
+    shortName: shortName(NAMES[no]),
+    judgment: JUDGMENTS[no],
+    upper: upper,
+    lower: lower,
+    upperSymbol: TRIGRAM_SYMBOL[upper],
+    lowerSymbol: TRIGRAM_SYMBOL[lower],
+    bits: bits
+  };
+}
+
+function shortName(full) {
+  if (full.charAt(1) === '为') return full.charAt(0);
+  return full.slice(2);
+}
+
+// 变爻：老阳(9)变阴、老阴(6)变阳
+function changedValues(values) {
+  return values.map(function (v) {
+    if (v === 9) return 8;
+    if (v === 6) return 7;
+    return v;
+  });
+}
+
+function hasChange(values) {
+  return values.some(function (v) { return v === 6 || v === 9; });
+}
+
+// 变爻位置（初→上），返回如 ['初九', '六三', '上九']
+// 称谓：初九/初六、九二~九五/六二~六五、上九/上六
+function changeLabels(values) {
+  const out = [];
+  values.forEach(function (v, i) {
+    if (v !== 6 && v !== 9) return;
+    const num = v === 9 ? '九' : '六';
+    if (i === 0) out.push('初' + num);
+    else if (i === 5) out.push('上' + num);
+    else out.push(num + YAO_LABELS[i]);
+  });
+  return out;
+}
+
+module.exports = {
+  TRIGRAM_BY_BITS: TRIGRAM_BY_BITS,
+  TRIGRAM_SYMBOL: TRIGRAM_SYMBOL,
+  NAMES: NAMES,
+  JUDGMENTS: JUDGMENTS,
+  buildHexagram: buildHexagram,
+  changedValues: changedValues,
+  hasChange: hasChange,
+  changeLabels: changeLabels,
+  shortName: shortName
+};
+
+});
+__def('utils/loops.js', function(module, exports, require){
+// utils/loops.js —— 揲四「手绘圈」几何（纯函数，无副作用，可在 Node 里单测）
+//
+// 目标：在 49 颗球的密排里，把「四策一撮」就地圈出来，且
+//   1) 圈贴着这四颗的外沿走（不至于把四颗画成一根香肠）；
+//   2) 遇别组的球就收口（圈不把别组的球圈进来）；
+//   3) 遇你画的那条线就收口（圈不越线）；
+//   4) 圈与圈之间不穿插。
+//
+// 坐标约定：pts 一律是「球心」坐标；W、H ＝ 圆席宽高（px）；sz ＝ 球径（px）。
+
+/* 取一撮：从种子开始，每次挑离这一撮最近的补齐（圈得才紧凑） */
+function takeNearest(pool, seed, need, pts) {
+  const got = [seed];
+  const rest = [];
+  for (let i = 0; i < pool.length; i++) if (pool[i] !== seed) rest.push(pool[i]);
+
+  while (got.length < need && rest.length) {
+    let bi = 0, bd = 1e18;
+    for (let k = 0; k < rest.length; k++) {
+      let s = 0;
+      for (let q = 0; q < got.length; q++) {
+        const dx = pts[rest[k]].x - pts[got[q]].x;
+        const dy = pts[rest[k]].y - pts[got[q]].y;
+        s += dx * dx + dy * dy;
+      }
+      s /= got.length;
+      if (s < bd) { bd = s; bi = k; }
+    }
+    got.push(rest[bi]);
+    rest.splice(bi, 1);
+  }
+  return got;
+}
+
+/* 最紧凑的一撮：枚举种子，取离它最近的 k-1 颗，选「最远两颗距离」最小的那一组。
+   余数那一撮（3~4 颗）常被摊在球阵边缘，东一颗西一颗，圈出来就是靴子形；
+   先在剩下的球里挑一组挨得最紧的，圈自然就圆。O(n² log n)，n≤49，约 1ms。 */
+function tightest(pool, k, pts) {
+  if (k >= pool.length) return pool.slice();
+  if (k <= 0) return [];
+  let best = null, bestD = 1e18;
+  for (let s = 0; s < pool.length; s++) {
+    const si = pool[s];
+    const rest = [];
+    for (let t = 0; t < pool.length; t++) {
+      if (t === s) continue;
+      const q = pool[t];
+      const dx = pts[q].x - pts[si].x, dy = pts[q].y - pts[si].y;
+      rest.push({ i: q, d: dx * dx + dy * dy });
+    }
+    rest.sort(function (a, b) { return a.d - b.d; });
+    const cand = [si];
+    for (let u = 0; u < rest.length && cand.length < k; u++) cand.push(rest[u].i);
+    let far = 0;
+    for (let a = 0; a < cand.length; a++) {
+      for (let b = a + 1; b < cand.length; b++) {
+        const dx = pts[cand[a]].x - pts[cand[b]].x, dy = pts[cand[a]].y - pts[cand[b]].y;
+        const d = dx * dx + dy * dy;
+        if (d > far) far = d;
+      }
+    }
+    if (far < bestD - 1e-9) { bestD = far; best = cand; }
+  }
+  return best || pool.slice(0, k);
+}
+
+/* 四颗一撮：种子取「离本片重心最远」的那颗，再逐个挑最近的补齐 */
+function cluster4(idxs, pts) {
+  let left = idxs.slice();
+  const out = [];
+  while (left.length >= 4) {
+    let cx = 0, cy = 0;
+    for (let i = 0; i < left.length; i++) { cx += pts[left[i]].x; cy += pts[left[i]].y; }
+    cx /= left.length; cy /= left.length;
+
+    let si = 0, far = -1;
+    for (let j = 0; j < left.length; j++) {
+      const dx = pts[left[j]].x - cx, dy = pts[left[j]].y - cy;
+      const dd = dx * dx + dy * dy;
+      if (dd > far) { far = dd; si = j; }
+    }
+    const g = takeNearest(left, left[si], 4, pts);
+    out.push(g);
+    left = left.filter(function (x) { return g.indexOf(x) < 0; });
+  }
+  return out;
+}
+
+/* 一撮的「最远半径平方」——越小越紧凑 */
+function clusterCost(g, pts) {
+  let cx = 0, cy = 0;
+  for (let i = 0; i < g.length; i++) { cx += pts[g[i]].x; cy += pts[g[i]].y; }
+  cx /= g.length; cy /= g.length;
+  let m = 0;
+  for (let j = 0; j < g.length; j++) {
+    const dx = pts[g[j]].x - cx, dy = pts[g[j]].y - cy;
+    const d = dx * dx + dy * dy;
+    if (d > m) m = d;
+  }
+  return m;
+}
+
+/* 两撮之间互换成员，把每一撮收得更紧（圈更小更圆） */
+function refineClusters(gs, pts) {
+  for (let pass = 0; pass < 3; pass++) {
+    let changed = false;
+    for (let a = 0; a < gs.length; a++) {
+      for (let b = a + 1; b < gs.length; b++) {
+        const A = gs[a], B = gs[b];
+        let base = clusterCost(A, pts) + clusterCost(B, pts);
+        for (let u = 0; u < A.length; u++) {
+          for (let v = 0; v < B.length; v++) {
+            let t = A[u]; A[u] = B[v]; B[v] = t;
+            const now = clusterCost(A, pts) + clusterCost(B, pts);
+            if (now < base - 0.01) { base = now; changed = true; }
+            else { t = A[u]; A[u] = B[v]; B[v] = t; }
+          }
+        }
+      }
+    }
+    if (!changed) break;
+  }
+  return gs;
+}
+
+/* 你画的线在某个 y 上的 x（折线插值） */
+function boundaryX(stroke, y) {
+  let best = 1e9, bx = stroke[0].x;
+  for (let i = 0; i < stroke.length - 1; i++) {
+    const a = stroke[i], c = stroke[i + 1];
+    const y0 = Math.min(a.y, c.y), y1 = Math.max(a.y, c.y);
+    const yy = Math.max(y0, Math.min(y1, y));
+    const t = (y1 === y0) ? 0 : (yy - y0) / (y1 - y0);
+    const x = a.x + (c.x - a.x) * t;
+    const d = Math.abs(y - yy);
+    if (d < best) { best = d; bx = x; }
+  }
+  return bx;
+}
+
+/* 分组：跳过挂起的那一枚；左右各按 4 颗一格切分，余数单独归一撮
+   返回 [{idx:[球序号], rem:bool, side:'L'|'R'}]
+   注意：整除不是余零，而是余四（《占卜玄机》），故 rem = m % 4 || 4，
+   这一撮整四颗与余 1/2/3 一样要取出离席。 */
+function groupBalls(sides, pts, skip, sz) {
+  const out = [];
+  ['L', 'R'].forEach(function (side) {
+    const idxs = [];
+    for (let i = 0; i < sides.length; i++) {
+      if (sides[i] === side && i !== skip) idxs.push(i);
+    }
+    const m = idxs.length;
+    if (!m) return;
+
+    const rem = m % 4 || 4;
+
+    /* 余数那一撮：以离本侧重心最远的一颗作种子，就近凑够 */
+    let cx = 0, cy = 0;
+    for (let a = 0; a < m; a++) { cx += pts[idxs[a]].x; cy += pts[idxs[a]].y; }
+    cx /= m; cy /= m;
+
+    let seed = idxs[0], far = -1;
+    for (let b = 0; b < m; b++) {
+      const dx = pts[idxs[b]].x - cx, dy = pts[idxs[b]].y - cy;
+      const dd = dx * dx + dy * dy;
+      if (dd > far) { far = dd; seed = idxs[b]; }
+    }
+    const remIdx = takeNearest(idxs, seed, rem, pts);
+    const rest = [];
+    for (let c = 0; c < m; c++) if (remIdx.indexOf(idxs[c]) < 0) rest.push(idxs[c]);
+
+    if (rest.length >= 4) {
+      const gs = refineClusters(cluster4(rest, pts), pts);
+      for (let t = 0; t < gs.length; t++) out.push({ idx: gs[t], rem: false, side: side });
+    }
+    out.push({ idx: remIdx, rem: true, side: side });
+  });
+  return out;
+}
+
+/* 组内最小生成树：四颗以内直接 Prim，用来把「串在一起的四颗」连成骨架 */
+function mstPairs(idxs, pts) {
+  const m = idxs.length;
+  if (m < 2) return [];
+  const inTree = [0], out = [];
+  const d = function (a, b) {
+    const p = pts[idxs[a]], q = pts[idxs[b]];
+    return Math.hypot(p.x - q.x, p.y - q.y);
+  };
+  while (inTree.length < m) {
+    let ba = -1, bb = -1, bd = 1e18;
+    for (let i = 0; i < inTree.length; i++) {
+      for (let b = 0; b < m; b++) {
+        if (inTree.indexOf(b) >= 0) continue;
+        const dd = d(inTree[i], b);
+        if (dd < bd) { bd = dd; ba = inTree[i]; bb = b; }
+      }
+    }
+    if (bb < 0) break;
+    out.push([idxs[ba], idxs[bb]]);
+    inTree.push(bb);
+  }
+  return out;
+}
+
+/* 单圈的半径序列：144 个方向（画的时候再按弧长重采成 56 点），
+   取「本组球盘 ∪ 骨骼胶囊」的外沿，再被别组球、被划线挡住的地方收口，最后加一点极轻的手抖。
+
+   ⚠️ 骨架＝球心最小生成树 + 等距外扩。
+   只按各球圆盘取径向最外沿会漏：四颗一散开，球缝那条射线谁也碰不到，
+   半径直接塌到 0，圈就甩出尖刺斜穿自家球（实测 17% 的球被切在圈外）。 */
+/* 环形序列的闭运算：先滚动取最大、再滚动取最小。
+   窄于窗口的深谷被抬平，宽缓的起伏不动——用来去掉球缝处的尖刺。 */
+const CLOSE_W = 12, CLOSE_W_REM = 20;
+function closeSeq(arr, w) {
+  const m = arr.length, up = [], out = [];
+  for (let i = 0; i < m; i++) {
+    let v = -1e9;
+    for (let j = -w; j <= w; j++) { const q = arr[(i + j + m * 2) % m]; if (q > v) v = q; }
+    up.push(v);
+  }
+  for (let i = 0; i < m; i++) {
+    let v = 1e9;
+    for (let j = -w; j <= w; j++) { const q = up[(i + j + m * 2) % m]; if (q < v) v = q; }
+    out.push(v);
+  }
+  return out;
+}
+
+function loopGeom(g, pts, sz, stroke, W, H, seed) {
+  const n = g.idx.length, R = sz / 2, u = sz / 13;
+  const Rneed = R + 1.6 * u;     // 硬下限：球边再外 1.6u（多留一点，抵掉折线/贝塞尔的弦切误差）
+  const Rwant = R + 2.35 * u;    // 常态留白，笔尖舒展开的样子
+  const Rf = R + 1.0 * u;        // 别组的球：贴到它的边就收口
+  const lim = 1.2 * u;           // 划线这道墙的余量
+  const N = 144, th = [], rad = [], floor = [];
+
+  let cx = 0, cy = 0;
+  for (let i = 0; i < n; i++) { cx += pts[g.idx[i]].x; cy += pts[g.idx[i]].y; }
+  cx /= n; cy /= n;
+
+  const bones = mstPairs(g.idx, pts);
+
+  function foreignCap(ux, uy) {
+    let cap = 1e9;
+    for (let o = 0; o < pts.length; o++) {
+      if (g.idx.indexOf(o) >= 0) continue;
+      const ex = pts[o].x - cx, ey = pts[o].y - cy;
+      const ej = ex * ux + ey * uy;
+      const ep = ex * ex + ey * ey - ej * ej;
+      if (ep >= Rf * Rf || ej <= 0) continue;
+      const near = ej - Math.sqrt(Rf * Rf - ep);
+      if (near > 0 && near < cap) cap = near;
+    }
+    return cap;
+  }
+
+  function wallFor(ux, uy, r) {
+    if (!stroke || stroke.length < 2) return 1e9;
+    if (ux > 0.02 || ux < -0.02) {
+      const py = Math.max(1, Math.min(H - 1, cy + r * uy));
+      const bx = boundaryX(stroke, py);
+      return (g.side === 'L') ? (bx - lim - cx) / ux : (bx + lim - cx) / ux;
+    }
+    return 1e9;
+  }
+
+  /* 本组沿某方向的「外沿半径」：球盘 ∪ 骨骼胶囊（等距外扩）取径向最外点。
+     球盘保证四颗各自被整颗包住；胶囊把相邻两颗之间的缺口填成腰身，
+     圈于是在球缝里「收一下」而不是塌成尖刺。 */
+  function env(ux, uy, Rn) {
+    let best = 0;
+    for (let a = 0; a < n + bones.length * 6; a++) {
+      let px, py;
+      if (a < n) { const q = pts[g.idx[a]]; px = q.x; py = q.y; }
+      else {
+        const s = a - n, e = bones[(s / 6) | 0], tt = (s % 6) / 6;
+        const p1 = pts[e[0]], p2 = pts[e[1]];
+        px = p1.x + (p2.x - p1.x) * tt;
+        py = p1.y + (p2.y - p1.y) * tt;
+      }
+      const dx = px - cx, dy = py - cy;
+      const pj = dx * ux + dy * uy;
+      const pp = dx * dx + dy * dy - pj * pj;
+      if (pp > Rn * Rn) continue;
+      const f = pj + Math.sqrt(Rn * Rn - pp);
+      if (f > best) best = f;
+    }
+    return best;
+  }
+
+  /* 先把「必需半径」与「舒适半径」逐方向算成序列 */
+  const M0 = [], W0 = [];
+  /* 凸包外扩（支撑函数）：与胶囊加权，把「两球之间的公切线」这段直边拉成弧，
+     圈于是介于「紧贴四球」与「整团凸起」之间，既不至于包进邻球，也不显出生硬的多边形 */
+  function convexR(ux, uy, d) {
+    let proj = -1e9;
+    for (let a = 0; a < n; a++) {
+      const q = pts[g.idx[a]];
+      const pj = (q.x - cx) * ux + (q.y - cy) * uy;
+      if (pj > proj) proj = pj;
+    }
+    return Math.max(2 * u, proj + d);
+  }
+  const MIX = 0.84;      // 胶囊占比：1=纯胶囊（最贴合），0=纯凸包（最圆但最大）
+
+  for (let k = 0; k < N; k++) {
+    const t = k / N * Math.PI * 2;
+    const ux = Math.cos(t), uy = Math.sin(t);
+    let m0 = MIX * env(ux, uy, Rneed) + (1 - MIX) * convexR(ux, uy, Rneed);
+    let w0 = MIX * env(ux, uy, Rwant) + (1 - MIX) * convexR(ux, uy, Rwant);
+    if (m0 < 2 * u) m0 = 2 * u;
+    if (w0 < m0) w0 = m0;
+    M0.push(m0); W0.push(w0);
+  }
+
+  /* 闭运算（滚动最大 → 滚动最小）：只填平「窄而深」的谷，宽缓的腰身原样保留。
+     球缝里那条射线谁也碰不到，径向半径会塌成个位数，圈就在那里甩出尖刺与直角；
+     把窄谷抬平之后，圈既仍贴着四颗球（不去包邻球），又不会啃出手套形。 */
+  const cw = g.rem ? CLOSE_W_REM : CLOSE_W;
+  const M1 = closeSeq(M0, cw), W1 = closeSeq(W0, cw);
+
+  for (let k = 0; k < N; k++) {
+    const t = k / N * Math.PI * 2;
+    const ux = Math.cos(t), uy = Math.sin(t);
+
+    const must = M1[k];
+    let want = W1[k];
+    if (want < must) want = must;
+
+    const wob = (0.42 + 0.3 * Math.sin(3 * t + seed * 1.7) + 0.18 * Math.sin(7 * t + seed * 4.3)) * u;
+    let r = want + wob;
+
+    /* 收口：邻球 / 划线，但不得压进 must 以内 */
+    const capF = foreignCap(ux, uy);
+    if (capF < r) r = capF;
+    const wall = wallFor(ux, uy, r);
+    if (wall > 0 && wall < r) r = wall;
+    if (r < must) r = must;
+
+    floor.push(must);
+    rad.push(r);
+    th.push(t);
+  }
+
+  /* 半径序列轻微平滑，抹掉台阶，像笔尖带出来的圆润 */
+  const sm = rad.slice();
+  for (let k2 = 0; k2 < N; k2++) {
+    sm[k2] = (rad[(k2 - 1 + N) % N] + rad[k2] * 2 + rad[(k2 + 1) % N]) / 4;
+  }
+
+  /* 平滑会往里收，先把手绘的鼓胀补回、再按 must 保底；
+     收口只能发生在 must 之外，否则自家球又被切了 */
+  for (let k5 = 0; k5 < N; k5++) {
+    const ux5 = Math.cos(th[k5]), uy5 = Math.sin(th[k5]);
+    if (sm[k5] < floor[k5]) sm[k5] = floor[k5];
+    const cap5 = foreignCap(ux5, uy5);
+    if (cap5 >= floor[k5] && cap5 < sm[k5]) sm[k5] = cap5;
+    const wall5 = wallFor(ux5, uy5, sm[k5]);
+    if (wall5 >= floor[k5] && wall5 < sm[k5]) sm[k5] = wall5;
+  }
+
+  /* 144 个方向只是「算」的密度；画的时候按弧长重采成 56 点：
+     形状不变，贝塞尔段数省三分之二（淡入时每 33ms 全量重绘）。
+     必须重采而不是直接稀疏采样——把 144 点隔一个取一个，弦又会把球切掉。 */
+  const dense = [];
+  for (let k3 = 0; k3 < N; k3++) {
+    dense.push({ x: cx + sm[k3] * Math.cos(th[k3]), y: cy + sm[k3] * Math.sin(th[k3]) });
+  }
+  const segLen = [], acc = [];
+  let total = 0;
+  for (let i2 = 0; i2 < N; i2++) {
+    const a = dense[i2], b = dense[(i2 + 1) % N];
+    const d = Math.hypot(b.x - a.x, b.y - a.y) || 1e-6;
+    segLen.push(d); total += d; acc.push(total);
+  }
+  const M = 56, outPts = [], outTh = [], outNeed = [];
+  let cur = 0;
+  for (let i3 = 0; i3 < M; i3++) {
+    const target = total * i3 / M;
+    while (cur < N - 1 && acc[cur] < target) cur++;
+    const prev = cur === 0 ? 0 : acc[cur - 1];
+    const t = Math.max(0, Math.min(1, (target - prev) / segLen[cur]));
+    const a = dense[cur], b = dense[(cur + 1) % N];
+    const px = a.x + (b.x - a.x) * t, py = a.y + (b.y - a.y) * t;
+    outPts.push({ x: px, y: py });
+    outTh.push(Math.atan2(py - cy, px - cx));
+    outNeed.push(Math.max(floor[cur], floor[(cur + 1) % N]));
+  }
+
+  /* 折角抻圆：反复取邻点均值（凹陷处被拉平），一旦收进球边以内就顶回下限。
+     这样球缝里的尖角被抹成圆弧，球外侧的鼓胀又不会被削掉。 */
+  for (let pass = 0; pass < 7; pass++) {
+    const tmp = [];
+    for (let i4 = 0; i4 < M; i4++) {
+      const a = outPts[(i4 - 1 + M) % M], b = outPts[i4], c2 = outPts[(i4 + 1) % M];
+      tmp.push({ x: (a.x + 2 * b.x + c2.x) / 4, y: (a.y + 2 * b.y + c2.y) / 4 });
+    }
+    for (let i5 = 0; i5 < M; i5++) {
+      const q = tmp[i5];
+      const dx = q.x - cx, dy = q.y - cy;
+      const d = Math.hypot(dx, dy) || 1e-6;
+      /* 按「新方向」重新算所需半径——点被拉偏了角度，旧的下限就不作数了 */
+      const need = Math.max(outNeed[i5], env(dx / d, dy / d, Rneed));
+      if (d < need) {
+        const k = need / d;
+        q.x = cx + dx * k; q.y = cy + dy * k;
+      }
+      outPts[i5] = q;
+    }
+  }
+  for (let i6 = 0; i6 < M; i6++) outTh[i6] = Math.atan2(outPts[i6].y - cy, outPts[i6].x - cx);
+
+  return {
+    cx: cx, cy: cy, th: outTh, rad: outPts.map(function (p) { return Math.hypot(p.x - cx, p.y - cy); }),
+    need: outNeed,          // 硬下限（球边 + 1.6u），圈圈互让时也不许越过去
+    pts: outPts, side: g.side, rem: g.rem
+  };
+}
+
+function insidePoly(p, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    if (((poly[i].y > p.y) !== (poly[j].y > p.y)) &&
+      (p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)) c = !c;
+  }
+  return c;
+}
+
+/* 圈与圈互不穿插：谁的点落进别人的圈里，就把那一点往自家中心收，
+   但收不过自家球的硬下限——宁可两圈稍稍蹭上，也不能把球漏在圈外。
+   先用包围盒筛掉大半不相干的圈对，整页 13 个圈也能压到几毫秒。 */
+function avoidCross(loops) {
+  const boxes = loops.map(function (l) {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (let i = 0; i < l.pts.length; i++) {
+      const p = l.pts[i];
+      if (p.x < x0) x0 = p.x;
+      if (p.x > x1) x1 = p.x;
+      if (p.y < y0) y0 = p.y;
+      if (p.y > y1) y1 = p.y;
+    }
+    return { x0: x0, y0: y0, x1: x1, y1: y1 };
+  });
+
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false;
+    for (let a = 0; a < loops.length; a++) {
+      for (let b = a + 1; b < loops.length; b++) {
+        const ba = boxes[a], bb = boxes[b];
+        if (ba.x1 < bb.x0 || bb.x1 < ba.x0 || ba.y1 < bb.y0 || bb.y1 < ba.y0) continue;
+        const A = loops[a], B = loops[b];
+        for (let side = 0; side < 2; side++) {
+          const me = side ? B : A, other = side ? A : B;
+          const ob = side ? ba : bb;
+          for (let i = 0; i < me.pts.length; i++) {
+            const p = me.pts[i];
+            if (p.x < ob.x0 || p.x > ob.x1 || p.y < ob.y0 || p.y > ob.y1) continue;
+            if (!insidePoly(p, other.pts)) continue;
+            let nr = me.rad[i] - 1.1;
+            if (nr < me.need[i]) nr = me.need[i];
+            if (nr < me.rad[i] - 1e-6) {
+              me.rad[i] = nr;
+              me.pts[i] = { x: me.cx + nr * Math.cos(me.th[i]), y: me.cy + nr * Math.sin(me.th[i]) };
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+    if (!changed) break;
+  }
+}
+
+/* 一组 group → 一圈闭合曲线（弧长重采 56 点 → 三次贝塞尔段） */
+function buildLoops(groups, pts, sz, stroke, W, H) {
+  const loops = [];
+  for (let i = 0; i < groups.length; i++) {
+    const seed = i * 1.37 + (groups[i].side === 'L' ? 0.4 : 2.1);
+    loops.push(loopGeom(groups[i], pts, sz, stroke, W, H, seed));
+  }
+  avoidCross(loops);
+  return loops.map(function (lp) {
+    return { rem: lp.rem, side: lp.side, poly: lp.pts, segs: curveSegs(lp.pts) };
+  });
+}
+
+/* 闭合折线（弧长重采 56 点）→ Catmull-Rom 三次贝塞尔段，供 canvas 逐段画 */
+function curveSegs(p) {
+  const n = p.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
+    out.push({
+      c1: { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 },
+      c2: { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 },
+      p: p2
+    });
+  }
+  return out;
+}
+
+module.exports = {
+  takeNearest: takeNearest,
+  cluster4: cluster4,
+  groupBalls: groupBalls,
+  buildLoops: buildLoops,
+  curveSegs: curveSegs,
+  boundaryX: boundaryX
+};
+
+});
+__def('utils/store.js', function(module, exports, require){
+// utils/store.js —— 占例本地存储
+const KEY = 'dayan_sessions_v1';
+const MAX = 100;
+
+function list() {
+  try {
+    const all = wx.getStorageSync(KEY);
+    return Array.isArray(all) ? all : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function save(session) {
+  const all = list();
+  const record = Object.assign({}, session, {
+    id: session.id || ('s' + Date.now() + Math.floor(Math.random() * 10000)),
+    createdAt: session.createdAt || Date.now()
+  });
+  const rest = all.filter(function (item) { return item.id !== record.id; });
+  rest.unshift(record);
+  try {
+    wx.setStorageSync(KEY, rest.slice(0, MAX));
+  } catch (e) {
+    return { data: null, error: 'CLIENT_EXCEPTION' };
+  }
+  return { data: record, error: null };
+}
+
+function get(id) {
+  const all = list();
+  for (let i = 0; i < all.length; i++) {
+    if (all[i].id === id) return all[i];
+  }
+  return null;
+}
+
+function remove(id) {
+  const rest = list().filter(function (item) { return item.id !== id; });
+  try {
+    wx.setStorageSync(KEY, rest);
+  } catch (e) {
+    return { data: null, error: 'CLIENT_EXCEPTION' };
+  }
+  return { data: true, error: null };
+}
+
+function formatTime(ts) {
+  const d = new Date(ts || Date.now());
+  const pad = function (n) { return n < 10 ? ('0' + n) : ('' + n); };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+    ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+module.exports = {
+  list: list,
+  save: save,
+  get: get,
+  remove: remove,
+  formatTime: formatTime
+};
+
+});
+__def('pages/index/index.js', function(module, exports, require){
+__cur = "pages/index/index";
+const dayan = require('../../utils/dayan.js');
+
+Page({
+  data: {
+    balls: [],
+    ballSize: 30
+  },
+
+  onLoad: function () {
+    // 以 rpx 为单位生成散而不叠的白球堆
+    const pts = dayan.layoutBalls(20, 686, 300, 30, 12);
+    const balls = pts.map(function (p, i) {
+      return { id: 'b' + i, x: Math.round(p.x), y: Math.round(p.y) };
+    });
+    this.setData({ balls: balls });
+  },
+
+  startDivine: function () {
+    wx.navigateTo({ url: '/pages/divine/divine' });
+  },
+
+  goHistory: function () {
+    wx.navigateTo({ url: '/pages/history/history' });
+  }
+});
+
+});
+__def('pages/divine/divine.js', function(module, exports, require){
+__cur = "pages/divine/divine";
+const dayan = require('../../utils/dayan.js');
+const loops = require('../../utils/loops.js');
+
+const YAO = ['初', '二', '三', '四', '五', '上'];
+const CN = { 6: '六', 7: '七', 8: '八', 9: '九' };
+const BIAN = ['一变', '二变', '三变'];
+
+/* 一爻步骤：首爻八步（含 S1 五十取一），太极既立之后七步 */
+function buildSteps(withHang) {
+  const s = [];
+  if (withHang) s.push({ k: 'hang', lab: '挂一', full: '挂一 · 虚一不用' });
+  for (let b = 0; b < 3; b++) {
+    s.push({ k: 'split', b: b, lab: '分二挂一', full: '分二挂一 · 第' + (b + 1) + '变' });
+    s.push({ k: 'count', b: b, lab: '揲四归奇', full: '揲四归奇 · 第' + (b + 1) + '变' });
+  }
+  s.push({ k: 'yao', lab: '成爻', full: '成爻 · 三变既毕' });
+  return s;
+}
+
+Page({
+  data: {
+    step: 0,
+    stepKey: 'hang',
+    metaText: '初爻 · 起筮',
+    stepName: 'S1 挂一 · 虚一不用',
+    rails: [],
+    yaoDots: [],
+    pillars: [],
+
+    total: 50,
+    pileCount: 50,
+    taijiOn: false,
+    balls: [],
+    leftCount: 0,
+    rightCount: 0,
+    splitDone: false,
+    chips: [],
+
+    formulaText: '',
+    formulaNote: '',
+
+    yaoRemain: 0,
+    yaoNum: '',
+    yaoName: '',
+    yaoYang: true,
+
+    fly: [],
+    hint: '',
+    btnText: '下 一 步',
+    btnWait: false,
+    dia: 500,
+    ballSize: 26
+  },
+
+  onLoad: function () {
+    const sys = (wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync());
+    this.rpx = sys.windowWidth / 750;
+    this.dpr = sys.pixelRatio || 2;
+
+    /* 圆席直径：横向让出三变柱 112rpx + 页边距 18rpx×2 + 间隙 6rpx → 596；
+       纵向按屏幕可用高度回收（头部/记录带/太极/步骤轨/提示/按钮约 680rpx），
+       屏幕矮的机型自动缩，绝不把按钮顶出屏幕 */
+    const wLimit = 596;
+    const avail = Math.round((sys.windowHeight || 650) / this.rpx);
+    const hLimit = avail - 640;
+    this.diaRpx = Math.max(520, Math.min(wLimit, hLimit));
+    this.dia = Math.round(this.diaRpx * this.rpx);
+
+    this.sz = Math.round(this.dia * Math.sqrt(0.155 / 49));   // 球径（px）
+    this.gap = Math.round(this.sz * 0.4);                     // 最小间隙（px）
+
+    this.values = [];
+    this.yaoIndex = 0;
+    this.taiji = false;                           // 太极之策是否已取（十八变通用一枚）
+    this.steps = buildSteps(true);
+
+    this.balls = [];                              // { id, cx, cy, cls }
+    this.pts = [];                                // 球心坐标
+    this.sides = [];                              // 'L' / 'R'
+    this.stroke = [];                             // 你画的线（圆席内坐标）
+    this.extSeg = [];                             // 两端延长到席外的虚线段
+    this.hang = -1;
+    this.changes = [];                            // 每变 {r1,r2,next,...}
+    this.totals = [49, 0, 0];
+    this.nextTotal = 0;
+    this.pillarInfo = [null, null, null];
+    this.loopList = [];
+    this.loopAl = [];
+    this.loopSt = [];
+    this.strokeAl = 1;                            // 你画的那条线的透明度（洗牌时一并淡出）
+    this.strokeSt = null;
+    this.seq = 0;
+
+    this.enterHang();
+  },
+
+  onReady: function () {
+    this.initInk();
+  },
+
+  onUnload: function () {
+    if (this.inkTimer) { clearInterval(this.inkTimer); this.inkTimer = null; }
+    (this.timers || []).forEach(function (t) { clearTimeout(t); });
+    this.timers = [];
+  },
+
+  /* setTimeout 统一登记，卸载时一并清掉 */
+  later: function (fn, ms) {
+    if (!this.timers) this.timers = [];
+    const self = this;
+    var id = setTimeout(function () {
+      self.timers = (self.timers || []).filter(function (x) { return x !== id; });
+      fn();
+    }, ms);
+    this.timers.push(id);
+    return id;
+  },
+
+  /* =========================================================
+     画布：你画的线 + 手绘圈
+     ========================================================= */
+  initInk: function () {
+    const self = this;
+    wx.createSelectorQuery().in(this)
+      .select('#ink')
+      .fields({ node: true, size: true })
+      .exec(function (res) {
+        if (!res || !res[0] || !res[0].node) return;
+        const canvas = res[0].node;
+        canvas.width = self.dia * self.dpr;
+        canvas.height = self.dia * self.dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(self.dpr, self.dpr);
+        self.ctx = ctx;
+        self.paint();
+      });
+  },
+
+  /* 笔宽等随球径等比缩放（原型 13px 球径下的标定值） */
+  u: function () { return this.sz / 13; },
+
+  paint: function () {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const W = this.dia, H = this.dia, u = this.u();
+    ctx.clearRect(0, 0, W, H);
+
+    /* 1. 各圈：手绘感的闭合曲线，余数那一撮实线加粗 + 淡底 */
+    for (let i = 0; i < this.loopList.length; i++) {
+      const a = this.loopAl[i];
+      if (!a || a < 0.01) continue;
+      const lp = this.loopList[i];
+      ctx.beginPath();
+      ctx.moveTo(lp.poly[0].x, lp.poly[0].y);
+      for (let k = 0; k < lp.segs.length; k++) {
+        const s = lp.segs[k];
+        ctx.bezierCurveTo(s.c1.x, s.c1.y, s.c2.x, s.c2.y, s.p.x, s.p.y);
+      }
+      ctx.closePath();
+      if (lp.rem) {
+        ctx.fillStyle = 'rgba(21,23,28,' + (0.055 * a).toFixed(3) + ')';
+        ctx.fill();
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1.4 * u;
+        ctx.strokeStyle = 'rgba(21,23,28,' + (0.66 * a).toFixed(3) + ')';
+      } else {
+        ctx.setLineDash([3.4 * u, 3.2 * u]);
+        ctx.lineWidth = 1.05 * u;
+        ctx.strokeStyle = 'rgba(21,23,28,' + (0.40 * a).toFixed(3) + ')';
+      }
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    /* 2. 你画的那条线：原样保留，压在最上层（洗牌时随圈一起淡出） */
+    const sa = (this.strokeAl == null ? 1 : this.strokeAl);
+    if (this.stroke && this.stroke.length > 1 && sa > 0.01) {
+      ctx.beginPath();
+      ctx.moveTo(this.stroke[0].x, this.stroke[0].y);
+      for (let i = 1; i < this.stroke.length; i++) ctx.lineTo(this.stroke[i].x, this.stroke[i].y);
+      ctx.lineWidth = 1.9 * u;
+      ctx.strokeStyle = 'rgba(21,23,28,' + (0.92 * sa).toFixed(3) + ')';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      /* 3. 两端延长到席外的部分：细虚线，告诉占者「归属是按这条延长后的分界判的」 */
+      if (this.extSeg && this.extSeg.length) {
+        ctx.setLineDash([3.2 * u, 4.2 * u]);
+        ctx.lineWidth = 1.0 * u;
+        ctx.strokeStyle = 'rgba(21,23,28,' + (0.42 * sa).toFixed(3) + ')';
+        for (let e = 0; e < this.extSeg.length; e++) {
+          const g = this.extSeg[e];
+          ctx.beginPath();
+          ctx.moveTo(g.x1, g.y1);
+          ctx.lineTo(g.x2, g.y2);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      }
+    }
+  },
+
+  inkTick: function () {
+    const now = Date.now();
+    let busy = false;
+    for (let i = 0; i < this.loopList.length; i++) {
+      const s = this.loopSt[i];
+      if (!s) continue;
+      if (now < s.t0) { busy = true; continue; }
+      const k = s.dur <= 0 ? 1 : Math.min(1, (now - s.t0) / s.dur);
+      const e = 1 - Math.pow(1 - k, 3);
+      this.loopAl[i] = s.from + (s.to - s.from) * e;
+      if (k < 1) busy = true;
+    }
+    /* 划线也一起淡出：圈散、线消，与洗牌同时收尾 */
+    if (this.strokeSt) {
+      const s = this.strokeSt;
+      if (now < s.t0) busy = true;
+      else {
+        const k = s.dur <= 0 ? 1 : Math.min(1, (now - s.t0) / s.dur);
+        const e = 1 - Math.pow(1 - k, 3);
+        this.strokeAl = s.from + (s.to - s.from) * e;
+        if (k < 1) busy = true;
+      }
+    }
+    this.paint();
+    if (!busy) {
+      clearInterval(this.inkTimer);
+      this.inkTimer = null;
+      if (!this.loopVisible) {
+        this.loopList = []; this.loopAl = []; this.loopSt = [];
+        this.strokeSt = null;
+        this.strokeAl = 0;
+        this.stroke = [];
+        this.paint();
+      }
+    }
+  },
+
+  startInk: function () {
+    if (this.inkTimer) return;
+    const self = this;
+    this.inkTimer = setInterval(function () { self.inkTick(); }, 33);
+  },
+
+  /* 画圈：每圈错峰淡入 */
+  showLoops: function () {
+    if (!this.ctx) this.initInk();          // 首帧画布还没就绪时补一次
+    this.strokeAl = 1;
+    this.strokeSt = null;
+    const groups = loops.groupBalls(this.sides, this.pts, this.hang, this.sz);
+    this.loopList = loops.buildLoops(groups, this.pts, this.sz, this.stroke, this.dia, this.dia);
+    this.loopAl = this.loopList.map(function () { return 0; });
+    const now = Date.now();
+    this.loopSt = this.loopList.map(function (_, i) {
+      return { from: 0, to: 1, t0: now + 120 + i * 55, dur: 260 };
+    });
+    this.loopVisible = true;
+    this.startInk();
+  },
+
+  /* 淡出：圈与划线一起消，默认 280ms，洗牌时给足 520ms 与球同步 */
+  fadeLoops: function (dur) {
+    const now = Date.now();
+    const d = dur || 280;
+    this.loopSt = this.loopAl.map(function (a) {
+      return { from: a, to: 0, t0: now, dur: d };
+    });
+    this.strokeSt = { from: (this.strokeAl == null ? 1 : this.strokeAl), to: 0, t0: now, dur: d };
+    this.loopVisible = false;
+    this.startInk();
+  },
+
+  /* 步骤号：按 k/b 反查，八步与七步自动对齐 */
+  stepIndex: function (k, b) {
+    for (let i = 0; i < this.steps.length; i++) {
+      const s = this.steps[i];
+      if (s.k === k && (b == null || s.b === b)) return i;
+    }
+    return 0;
+  },
+
+  clearInk: function () {
+    this.loopList = [];
+    this.loopAl = [];
+    this.loopSt = [];
+    this.loopVisible = false;
+    this.strokeSt = null;
+    this.strokeAl = 0;
+    this.stroke = [];
+    this.extSeg = [];
+    this.paint();
+  },
+
+  /* =========================================================
+     外壳：步骤轨 / 记录带 / 三变柱
+     ========================================================= */
+  chrome: function (n) {
+    const steps = this.steps;
+    const st = steps[n];
+
+    const rails = steps.map(function (s, i) {
+      return {
+        i: i,
+        n: i + 1,
+        lab: s.lab,
+        cls: i < n ? 'done' : (i === n ? 'cur' : ''),
+        line: i < steps.length - 1,
+        lineCls: i < n ? 'done' : ''
+      };
+    });
+
+    const pillars = [];
+    for (let b = 0; b < 3; b++) {
+      const info = this.pillarInfo[b];
+      const done = !!info;
+      const cnt = done ? (1 + info.r1 + info.r2) : 0;
+      /* 自上而下：挂 1 ｜ 右余 ｜ 左余 */
+      const dots = [];
+      for (let j = 0; j < cnt; j++) {
+        dots.push({ i: j, gap: j === 1 || j === 1 + info.r1 });
+      }
+      pillars.push({
+        lab: BIAN[b],
+        val: done ? cnt : '—',
+        c: done ? '#15171c' : '#c3c7cd',
+        done: done,
+        dots: dots
+      });
+    }
+
+    let meta = YAO[this.yaoIndex] + '爻 · ';
+    if (st.k === 'hang') meta += '起筮';
+    else if (st.k === 'yao') meta += '三变已毕';
+    else meta += '第 ' + (st.b + 1) + ' 变 · 第 ' + (n + 1) + '/' + steps.length + ' 步';
+
+    this.setData({
+      step: n,
+      stepKey: st.k,
+      rails: rails,
+      yaoDots: this.buildRecord(this.yaoIndex),
+      pillars: pillars,
+      metaText: meta,
+      stepName: 'S' + (n + 1) + ' ' + st.full
+    });
+  },
+
+  buildRecord: function (hi) {
+    const out = [];
+    for (let i = 0; i < 6; i++) {
+      const v = this.values[i];
+      const on = (i === hi);
+      if (!v) {
+        out.push({ k: YAO[i], v: '▢', cls: on ? 'cur' : '', bian: false });
+      } else {
+        const info = dayan.yaoInfo(v);
+        out.push({
+          k: YAO[i],
+          v: CN[v] + ' ' + info.symbol,
+          cls: on ? 'has cur' : 'has',
+          bian: !!info.changing
+        });
+      }
+    }
+    return out;
+  },
+
+  /* =========================================================
+     球池
+     ========================================================= */
+  /* 球径按「覆盖率恒定」换算：49 策与 28 策看着一样密，不会越洗越稀 */
+  ballFor: function (n) {
+    const target = this.dia * Math.sqrt(0.155 / Math.max(1, n));
+    const lo = 24 * this.rpx;
+    const hi = 44 * this.rpx;
+    return Math.max(2, Math.round(Math.min(hi, Math.max(lo, target))));
+  },
+
+  makeSpots: function (n) {
+    let raw = [];
+    for (let t = 0; t < 3; t++) {
+      raw = dayan.layoutEven(n, this.dia, this.sz, this.gap);
+      if (raw.length >= n) break;
+      raw = dayan.layoutInCircle(n, this.dia, this.sz, this.gap, 0);
+      if (raw.length >= n) break;
+    }
+    return raw.slice(0, n).map(function (p) {
+      return { x: p.x + this.sz / 2, y: p.y + this.sz / 2 };
+    }, this);
+  },
+
+  renderBalls: function () {
+    const sz = this.sz;
+    const balls = this.balls.map(function (b) {
+      return {
+        id: b.id,
+        x: Math.round(b.cx - sz / 2),
+        y: Math.round(b.cy - sz / 2),
+        cls: b.cls || '',
+        d: b.d || 0,
+        dl: b.dl || 0,
+        ad: b.ad || 0
+      };
+    });
+    /* 席上现存策数：ghost（原位虚线小圈）与 gone（已彻底离席）都不算球 */
+    let pile = 0;
+    this.balls.forEach(function (b) {
+      const c = b.cls || '';
+      if (c.indexOf('ghost') < 0 && c.indexOf('gone') < 0) pile++;
+    });
+    this.setData({ balls: balls, ballSize: sz, dia: this.dia, pileCount: pile });
+  },
+
+  /* 重新铺球：留到几颗就摆几颗，其余淡出 */
+  relayout: function (count, animate) {
+    this.sz = this.ballFor(count);
+    this.gap = Math.round(this.sz * 0.4);
+    const pts = this.makeSpots(count);
+    /* 已归奇离席的球不再参与，免得下一变又「复活」 */
+    const live = this.balls.filter(function (b) { return b.cls !== 'gone' && b.cls !== 'ghost'; });
+    const keep = live.slice(0, Math.min(live.length, count));
+    const next = [];
+    for (let i = 0; i < count; i++) {
+      const old = keep[i];
+      if (old) {
+        next.push({
+          id: old.id, cx: pts[i].x, cy: pts[i].y, cls: '',
+          d: animate ? 520 : 0, dl: animate ? i * 7 : 0
+        });
+      } else {
+        next.push({
+          id: 'b' + (this.seq++), cx: pts[i].x, cy: pts[i].y, cls: 'pop',
+          d: 0, dl: 0, ad: animate ? 300 + i * 6 : 0
+        });
+      }
+    }
+    this.balls = next;
+    this.pts = pts;
+    this.renderBalls();
+  },
+
+  /* =========================================================
+     S1 挂一（五十取一 · 太极）
+     ========================================================= */
+  enterHang: function () {
+    this.steps = buildSteps(!this.taiji);
+    this.stroke = [];
+    this.sides = [];
+    this.hang = -1;
+    this.changes = [];
+    this.totals = [49, 0, 0];
+    this.nextTotal = 0;
+    this.pillarInfo = [null, null, null];
+    this.clearInk();
+    this.balls = [];
+    this.relayout(50, false);              // 大衍之数五十：太极那一策此刻还在席上
+
+    this.setData({
+      total: 50,
+      taijiOn: false,                     // 太极位是虚位，点「下一步」才由席上飞入
+      leftCount: 0,
+      rightCount: 0,
+      splitDone: false,
+      chips: [],
+      formulaText: '',
+      formulaNote: '',
+      fly: [],
+      btnWait: false,
+      hint: '大衍之数五十，其用四十有九 —— 五十策尽列于席\n点「下一步」：自席上拈出一策，飞入上方太极位；此策十八变始终不动',
+      btnText: '下 一 步 · 拈 出 太 极'
+    });
+    this.chrome(0);
+  },
+
+  /* S1 的动作：把最上一策拈起变黑 → 原位撤去 → 飞入上方太极位 → 余 49 策 */
+  takeTaiji: function () {
+    if (this.hangAnimating) return;
+    const self = this;
+    if (!this.balls.length) {             // 极端兜底：没球就直接推进
+      this.taiji = true;
+      this.setData({ taijiOn: true, fly: [] });
+      this.enterSplit(0);
+      return;
+    }
+
+    /* 拈最上一枚：从球堆上沿起飞，飞向左上方太极位，路径最顺 */
+    let pick = 0, bestY = 1e9;
+    for (let i = 0; i < this.pts.length; i++) {
+      if (this.pts[i].y < bestY) { bestY = this.pts[i].y; pick = i; }
+    }
+    const p = this.pts[pick];
+    const sz = this.sz;
+    this.hangAnimating = true;
+
+    this.setData({
+      btnWait: true,
+      btnText: '拈 出 太 极 …',
+      hint: '自五十策中拈出一策，虚一不用 —— 此策为太极\n十八变自始至终不动，余四十九策以备分二'
+    });
+
+    /* 1. 拈起：这一枚先变黑，让人看清是从哪里取的 */
+    this.balls[pick].cls = 'dark';
+    this.balls[pick].d = 180;
+    this.renderBalls();
+
+    /* 2. 离席起飞：起飞前重测一次位置（页面滚过也不跑偏） */
+    this.later(function () {
+      self.measure(function () {
+        const r = self.circleRect, tr = self.taijiRect;
+        self.balls.splice(pick, 1);
+        self.pts.splice(pick, 1);
+        self.renderBalls();                       // 在席之策 50 → 49
+
+        const done = function () {
+          self.taiji = true;
+          self.hangAnimating = false;
+          self.setData({ taijiOn: true, fly: [] });
+          self.enterSplit(0);
+        };
+        if (!r || !tr) { done(); return; }       // 量不到位置就退化为直接落位
+
+        const x0 = Math.round(r.left + p.x - sz / 2);
+        const y0 = Math.round(r.top + p.y - sz / 2);
+        const tx = Math.round(tr.left + tr.width / 2 - x0 - sz / 2);
+        const ty = Math.round(tr.top + tr.height / 2 - y0 - sz / 2);
+        const sc = Math.round((46 * self.rpx / sz) * 100) / 100;   // 落到 46rpx 的太极球
+
+        self.setData({
+          fly: [{ id: 'taiji', x: x0, y: y0, size: sz, d: 560, dl: 0, land: false, tx: 0, ty: 0, sc: 1 }]
+        });
+        self.later(function () {
+          self.setData({
+            fly: [{ id: 'taiji', x: x0, y: y0, size: sz, d: 560, dl: 0, land: false, tx: tx, ty: ty, sc: sc }]
+          });
+        }, 30);
+        /* 3. 落定：飞球隐去、太极位那颗实球显形，同尺寸同位置，看不出接缝 */
+        self.later(done, 620);
+      });
+    }, 220);
+  },
+
+  /* =========================================================
+     S2/S4/S6 分二挂一
+     ========================================================= */
+  enterSplit: function (b) {
+    const total = b === 0 ? 49 : this.changes[b - 1].next;
+    this.totals[b] = total;
+
+    this.sides = [];
+    this.hang = -1;
+    /* b>0：圈与划线正随洗牌一起淡出，别在这里一刀清掉；淡完由 inkTick 收尾 */
+    if (b === 0) {
+      this.stroke = [];
+      this.clearInk();
+    } else {
+      this.strokeSt = this.strokeSt || { from: (this.strokeAl == null ? 1 : this.strokeAl), to: 0, t0: Date.now(), dur: 520 };
+      this.startInk();
+    }
+    if (b > 0) {
+      /* 揲四既毕，余策球「洗牌重分」：错峰散到新的落点 */
+      this.relayout(total, true);
+    } else if (this.balls.length !== total) {
+      this.relayout(total, false);
+    }
+
+    this.setData({
+      total: total,
+      leftCount: 0,
+      rightCount: 0,
+      splitDone: false,
+      chips: [],
+      formulaText: '',
+      formulaNote: '',
+      btnWait: true,
+      hint: '在球间从上往下画一条线，分成左右两堆\n线须自最上一排的上方起、画到最下一排的下方（上下画反也行），中路不要回折\n画成什么线就留什么线，球一颗都不动；松手后程序自右堆取一挂起',
+      btnText: '请 先 划 线 分 堆'
+    });
+    this.chrome(this.stepIndex('split', b));
+  },
+
+  /* 圆席在屏幕上的位置（飞球用） */
+  measure: function (cb) {
+    const self = this;
+    const q = wx.createSelectorQuery().in(this);
+    q.select('#ballField').boundingClientRect();
+    q.selectAll('.pil-dots').boundingClientRect();
+    q.select('.tj-ball').boundingClientRect();       // 太极位的落点（未拈出时也在，只是缩着）
+    q.exec(function (res) {
+      self.circleRect = res[0] || null;
+      self.pillarRects = res[1] || [];
+      self.taijiRect = res[2] || null;
+      if (cb) cb();
+    });
+  },
+
+  guard: function (e, type) {
+    const t = (e && e.touches && e.touches[0]) || null;
+    const px = t && t.clientX != null ? t.clientX : (t && t.pageX != null ? t.pageX : NaN);
+    const py = t && t.clientY != null ? t.clientY : (t && t.pageY != null ? t.pageY : NaN);
+    const key = type + '|' + ((e && e.timeStamp) || 0) + '|' + px + ',' + py;
+    if (this._lastKey === key) return true;
+    this._lastKey = key;
+    return false;
+  },
+
+  onTouchStart: function (e) {
+    if (this.data.stepKey !== 'split' || this.data.splitDone) return;
+    if (this.guard(e, 'start')) return;
+    const t = e.touches[0];
+    this.rawStroke = [{ x: t.clientX, y: t.clientY }];
+    /* 新的一笔：把上一变残留的圈、线、淡出动画一并清掉，免得抢画笔 */
+    this.stroke = [];
+    this.strokeAl = 1;
+    this.strokeSt = null;
+    this.loopList = [];
+    this.loopAl = [];
+    this.loopSt = [];
+    this.loopVisible = false;
+    if (this.inkTimer) { clearInterval(this.inkTimer); this.inkTimer = null; }
+    this.paint();
+    this.clearWarn();
+    this.measure();
+  },
+
+  /* 标红「归左归右说不清」的那几颗球，1.4 秒后自行褪回 */
+  warnBalls: function (idx) {
+    if (!idx || !idx.length) return;
+    const self = this;
+    this.balls.forEach(function (b, i) {
+      if (idx.indexOf(i) >= 0) { b.cls = 'warn'; b.d = 160; }
+    });
+    this.renderBalls();
+    this.warnOn = true;
+    this.later(function () {
+      if (!self.warnOn) return;
+      self.clearWarn();
+    }, 1400);
+  },
+
+  clearWarn: function () {
+    if (!this.warnOn) return;
+    this.warnOn = false;
+    this.balls.forEach(function (b) { if (b.cls === 'warn') b.cls = ''; });
+    this.renderBalls();
+  },
+
+  onTouchMove: function (e) {
+    if (this.data.stepKey !== 'split' || this.data.splitDone) return;
+    if (this.guard(e, 'move')) return;
+    const t = e.touches[0];
+    const prev = this.rawStroke[this.rawStroke.length - 1];
+    if (!prev) return;
+    const dx = t.clientX - prev.x, dy = t.clientY - prev.y;
+    if (Math.sqrt(dx * dx + dy * dy) < 6) return;
+    this.rawStroke.push({ x: t.clientX, y: t.clientY });
+
+    const r = this.circleRect;
+    if (!r) return;
+    this.stroke = this.rawStroke.map(function (p) {
+      return { x: p.x - r.left, y: p.y - r.top };
+    });
+    this.strokeAl = 1;      // 上一变的圈线可能刚淡过，这里必须重新点亮
+    this.strokeSt = null;
+    this.paint();
+  },
+
+  onTouchEnd: function (e) {
+    if (this.data.stepKey !== 'split' || this.data.splitDone) return;
+    if (this.guard(e, 'end')) return;
+    if (!this.rawStroke || this.rawStroke.length < 2) return;
+
+    if (!this.circleRect) {
+      const self = this;
+      this.measure(function () { self.finishSplit(); });
+      return;
+    }
+    this.finishSplit();
+  },
+
+  finishSplit: function () {
+    const self = this;
+    const r = this.circleRect;
+    let samples = this.rawStroke.map(function (p) {
+      return { x: p.x - r.left, y: p.y - r.top };
+    });
+
+    const boxes = this.pts.map(function (p) {
+      return { x: p.x - self.sz / 2, y: p.y - self.sz / 2 };
+    });
+
+    /* 先验笔势：方向明确、不回折、不横画。不再要求「线必须盖过上下两排球心」——
+       两端会沿切线延长到席外，延长线照样把圆席切开（见 dayan.extendSplit） */
+    const chk = dayan.checkSplit(boxes, samples, this.sz, this.dia, this.dia);
+    if (!chk.ok) {
+      if (chk.code === 'short') {
+        this.setData({ hint: '这一笔太短了，看不出分界\n请从球阵一侧划到另一侧，笔势要成一个方向' });
+      } else if (chk.code === 'flat') {
+        this.setData({ hint: '这一笔太横了\n分堆是按「每个高度上的分界点」判的，横线没有高下之分\n请上下走向地划：从球阵上方划到下方（或反过来）都行，斜着也可以' });
+      } else {
+        this.setData({ hint: '这一笔画回来了\n回折处同一高度会出现左右两个分界，球归哪边说不清\n请一笔画到底，不要往回折' });
+      }
+      wx.showToast({ title: '请重新划线', icon: 'none' });
+      return;
+    }
+
+    const res = dayan.splitByCurve(boxes, samples, this.sz, this.dia, this.dia);
+    if (!res || res.fallback || res.left < 1 || res.right < 2) {
+      wx.showToast({ title: '左右各留二策以上（挂一须从右堆取），请重画', icon: 'none' });
+      return;
+    }
+
+    const total = this.data.total;
+    const ch = dayan.change(total, res.left);
+    if (ch.error || ch.next < 12) {
+      wx.showToast({ title: '分堆无效，请重新划线', icon: 'none' });
+      return;
+    }
+
+    /* 挂一：右堆最上一枚变黑挂起 */
+    let pick = -1, bestY = 1e9;
+    for (let i = 0; i < this.pts.length; i++) {
+      if (res.sides[i] === 2 && this.pts[i].y < bestY) { bestY = this.pts[i].y; pick = i; }
+    }
+    if (pick < 0) {
+      wx.showToast({ title: '右堆为空，请重新划线', icon: 'none' });
+      return;
+    }
+
+    /* 球心正好压在线上的那几颗：判归属只看球心，但要标出来让占者看见 */
+    const edgeList = res.edge || [];
+    const edgeN = edgeList.length;
+    const edgeSet = {};
+    edgeList.forEach(function (i) { edgeSet[i] = 1; });
+
+    this.sides = res.sides.map(function (s) { return s === 1 ? 'L' : 'R'; });
+    this.hang = pick;
+    this.stroke = samples;
+    this.extSeg = res.ext || [];        // 两端延长到席外的那两段，画成细虚线
+    this.strokeAl = 1;
+    this.strokeSt = null;
+    this.paint();
+
+    this.balls.forEach(function (b, i) {
+      b.cls = (i === pick) ? 'dark' : '';
+      if (edgeSet[i]) b.cls += (b.cls ? ' ' : '') + 'edge';
+      b.d = 0;
+      b.dl = 0;
+    });
+    this.renderBalls();
+
+    const b = this.steps[this.data.step].b;
+    const divTip = (ch.r1 === 4 || ch.r2 === 4) ? ' · 整除者以四为余' : '';
+    const edgeTip = edgeN
+      ? '\n有 ' + edgeN + ' 颗球正压在这条线上（朱红虚环）· 归属只看球心：心在线左即左，在线右即右'
+      : '';
+    const extN = (res.ext || []).length;
+    const extTip = extN
+      ? '\n两端细虚线是把这一笔延长到席外的部分 —— 球按延长后的分界归边'
+      : '';
+    this.setData({
+      leftCount: res.left,
+      rightCount: res.right - 1,
+      splitDone: true,
+      btnWait: false,
+      chips: [
+        { t: '左 ' + res.left },
+        { t: '右 ' + (res.right - 1) },
+        { t: '挂 1', dark: true },
+        { t: '合 ' + total, sum: true }
+      ],
+      hint: '此线由你亲手所画，原样保留；球一颗未动' + extTip
+        + '\n右堆最上一枚已变黑挂起（第 ' + (b + 1) + ' 变，共 ' + total + ' 策）' + divTip + edgeTip,
+      btnText: '下 一 步（揲四归奇）'
+    });
+  },
+
+  onRedraw: function () {
+    if (this.data.stepKey !== 'split') return;
+    this.rawStroke = [];
+    this.stroke = [];
+    this.extSeg = [];
+    this.sides = [];
+    this.hang = -1;
+    this.paint();
+    this.balls.forEach(function (b) { b.cls = ''; b.d = 0; b.dl = 0; });
+    this.renderBalls();
+    this.setData({
+      leftCount: 0,
+      rightCount: 0,
+      splitDone: false,
+      chips: [],
+      btnWait: true,
+      hint: '在球间从上往下画一条线，分成左右两堆\n线须自最上一排的上方起、画到最下一排的下方（上下画反也行），中路不要回折\n画成什么线就留什么线，球一颗都不动；松手后程序自右堆取一挂起',
+      btnText: '请 先 划 线 分 堆'
+    });
+  },
+
+  /* =========================================================
+     S3/S5/S7 揲四归奇：不换页、球不动，四策一圈，余策归柱
+     ========================================================= */
+  enterCount: function (b) {
+    const ch = dayan.change(this.totals[b], this.data.leftCount);
+    this.changes[b] = ch;
+    this.nextTotal = ch.next;
+
+    this.setData({
+      btnWait: true,
+      btnText: '揲 四 中 …',
+      chips: [],
+      hint: '球一颗不动：四策一圈（圈不相交、不越线），余策变黑归奇\n'
+        + (ch.r1 === 4 || ch.r2 === 4 ? '此变有整除者，整四策以四为余、照常取出\n' : '')
+        + '归奇 ' + (1 + ch.r1 + ch.r2) + ' 策扐入「' + BIAN[b] + '」柱（自上而下：挂 1 ｜ 右余 ｜ 左余）'
+    });
+
+    /* 1. 就地画圈 */
+    this.showLoops();
+
+    /* 2. 定出离席的余策（含整除记四那四策），与圈里那一撮完全一致。
+       柱内自上而下是「挂 1 ｜ 右余 ｜ 左余」，自下而上码放即：左余 → 右余 → 挂 1 */
+    const remL = [];
+    const remR = [];
+    const groups = loops.groupBalls(this.sides, this.pts, this.hang, this.sz);
+    groups.forEach(function (g) {
+      if (!g.rem) return;
+      const box = (g.side === 'L') ? remL : remR;
+      g.idx.forEach(function (i) { box.push(i); });
+    });
+    const went = remL.concat(remR).concat([this.hang]);
+
+    const self = this;
+    const n = went.length;
+
+    /* 3. 余策变黑 */
+    this.later(function () {
+      self.balls.forEach(function (bl, i) {
+        if (went.indexOf(i) >= 0) { bl.cls = 'dark'; bl.d = 180; }
+      });
+      self.renderBalls();
+    }, 240);
+
+    /* 4. 逐颗飞入对应柱段；起飞前重测一次位置，页面滚过也不会跑偏。
+       黑球被「拎起」的那一瞬，原位立刻收成虚线小圈，画面上不留实球残影 */
+    const takeoff = 600;
+    const flight = 420;
+    const stagger = 32;
+    this.later(function () {
+      self.measure(function () {
+        self.balls.forEach(function (bl, i) {
+          if (went.indexOf(i) >= 0) { bl.cls = 'ghost'; bl.d = 220; }
+        });
+        self.renderBalls();
+        self.flyTo(b, went, self.pillarTarget(b, n, ch.r1, ch.r2));
+      });
+    }, takeoff);
+
+    const landed = takeoff + flight + stagger * Math.max(0, n - 1);
+
+    /* 5. 落定：黑球就地缩成柱内小黑点（自上而下第几格，就落在第几格） */
+    this.later(function () { self.settleFly(); }, landed + 40);
+
+    /* 6. 柱内计数亮起，按钮解禁。此时手绘圈与划线都还在，点「下一步」洗牌时才散 */
+    const arrive = landed + 40 + 220;
+    this.later(function () {
+      self.pillarInfo[b] = { r1: ch.r1, r2: ch.r2 };
+      self.chrome(self.stepIndex('count', b));
+      self.setData({
+        fly: [],
+        btnWait: false,
+        btnText: b < 2 ? '下 一 步（第 ' + (b + 2) + ' 变）' : '下 一 步（成爻）',
+        hint: '归奇 ' + (1 + ch.r1 + ch.r2) + ' 策已入「' + BIAN[b] + '」柱 · 余 ' + ch.next + ' 策'
+          + (b < 2 ? '，洗牌后作第 ' + (b + 2) + ' 变入策' : '以待成爻')
+      });
+    }, arrive);
+
+    /* 7. 算式条 */
+    const divTip = (ch.r1 === 4 || ch.r2 === 4) ? ' · 整除者以四为余' : '';
+    this.setData({
+      formulaText: ch.total + ' － 1(挂) － ' + ch.r1 + '(右余) － ' + ch.r2 + '(左余) ＝ ' + ch.next,
+      formulaNote: '本变归奇 ' + (1 + ch.r1 + ch.r2) + ' 策（挂 1 ｜ 右余 ' + ch.r1 + ' ｜ 左余 ' + ch.r2 + '）' + divTip
+    });
+    this.chrome(this.stepIndex('count', b));
+  },
+
+  /* 柱落点（视口坐标）：柱内自上而下「挂 1 ｜ 右余 ｜ 左余」，
+     第一格圆心即 .pil-dots 的 padding-top 10rpx + .bdot margin 4rpx + 半个球 6rpx = 20rpx */
+  pillarTarget: function (b, count, r1, r2) {
+    const rects = this.pillarRects || [];
+    const r = rects[b];
+    if (!r) return null;
+    return {
+      x: r.left + r.width / 2,
+      y: r.top + Math.round(22 * this.rpx),         // 第 0 格（挂 1）圆心 = 边框 2 + 内边距 10 + 上间距 4 + 半颗 6
+      pitch: Math.round(16 * this.rpx),             // 12rpx 球 + 4rpx 间距
+      extra: Math.round(8 * this.rpx),              // .gap 多出来的 8rpx
+      r1: r1 || 0,
+      r2: r2 || 0
+    };
+  },
+
+  /* 第 slot 格在柱内相对第 0 格下沉多少 */
+  slotDrop: function (slot, target) {
+    return slot * target.pitch
+      + (slot >= 1 ? target.extra : 0)
+      + (slot >= 1 + target.r1 ? target.extra : 0);
+  },
+
+  flyTo: function (b, went, target) {
+    if (!target || !this.circleRect) return;
+    const cr = this.circleRect;
+    const sz = this.sz;
+    const r1 = target.r1, r2 = target.r2;
+    const fly = [];
+    let n = 0;
+    for (let k = 0; k < went.length; k++) {
+      const i = went[k];
+      const p = this.pts[i];
+      if (!p) continue;
+      /* went 自下而上码：前 r2 颗是左余，接着 r1 颗是右余，最后一颗是挂 1 */
+      let slot;
+      if (k >= r1 + r2) slot = 0;
+      else if (k >= r2) slot = 1 + (k - r2);
+      else slot = 1 + r1 + k;
+      fly.push({
+        id: 'f' + b + '_' + i,
+        x: Math.round(cr.left + p.x - sz / 2),
+        y: Math.round(cr.top + p.y - sz / 2),
+        size: sz,
+        tx: 0,
+        ty: 0,
+        sc: 1,
+        d: 420,
+        dl: n * 32,
+        ty2: Math.round(target.y - (cr.top + p.y) + this.slotDrop(slot, target))
+      });
+      n++;
+    }
+    this.setData({ fly: fly });
+    const self = this;
+    this.later(function () {
+      self.setData({
+        fly: fly.map(function (f) {
+          return {
+            id: f.id, x: f.x, y: f.y, size: f.size, d: f.d, dl: f.dl, sc: 1,
+            tx: Math.round(target.x - f.x - f.size / 2),
+            ty: f.ty2
+          };
+        })
+      });
+    }, 30);
+  },
+
+  /* 落定：黑球就地缩成柱内那颗实心小黑点，无缝衔接 */
+  settleFly: function () {
+    const fly = this.data.fly || [];
+    if (!fly.length) return;
+    const dot = 12 * this.rpx;
+    const sc = Math.max(0.28, Math.min(1, dot / this.sz));
+    this.setData({
+      fly: fly.map(function (f) {
+        return {
+          id: f.id, x: f.x, y: f.y, size: f.size, tx: f.tx, ty: f.ty,
+          sc: Math.round(sc * 100) / 100, d: 200, dl: 0, land: true
+        };
+      })
+    });
+  },
+
+  /* =========================================================
+     S8 成爻
+     ========================================================= */
+  enterYao: function () {
+    const remain = this.changes[2].next;
+    const value = dayan.yaoValue(remain);
+    if (!value) {
+      wx.showToast({ title: '演算异常，请重新起卦', icon: 'none' });
+      return;
+    }
+    if (this.values.length === this.yaoIndex) this.values.push(value);
+    const info = dayan.yaoInfo(value);
+
+    this.clearInk();
+    this.balls = [];
+    this.renderBalls();
+
+    this.setData({
+      yaoRemain: remain,
+      yaoNum: CN[value],
+      yaoName: info.name,
+      yaoYang: info.yang,
+      fly: [],
+      btnWait: false,
+      hint: info.name + ' · ' + (info.changing ? '可变之爻，爻旁记「变」' : '不变之爻')
+        + '\n' + remain + ' ÷ 4 ＝ ' + value + '，已记入六爻带的「' + YAO[this.yaoIndex] + '」位',
+      btnText: this.yaoIndex === 5 ? '查 看 卦 象' : '演 下 一 爻'
+    });
+    this.chrome(this.steps.length - 1);
+  },
+
+  /* =========================================================
+     推进
+     ========================================================= */
+  onNext: function () {
+    const st = this.steps[this.data.step];
+
+    if (st.k === 'hang') {
+      this.takeTaiji();                    // 太极既立在动画收尾处置 true
+      return;
+    }
+
+    if (st.k === 'split') {
+      if (!this.data.splitDone) {
+        wx.showToast({ title: '请先在球堆上画线分堆', icon: 'none' });
+        return;
+      }
+      if (this.data.btnWait) return;
+      this.enterCount(st.b);
+      return;
+    }
+
+    if (st.k === 'count') {
+      if (this.data.btnWait) return;
+      if (this.changes[st.b].next < 12) {
+        wx.showToast({ title: '演算异常，请重新起卦', icon: 'none' });
+        return;
+      }
+      /* 圈与划线留着不动，等下一变洗牌时才散（520ms 与球的位移同步） */
+      this.fadeLoops(520);
+      if (st.b < 2) this.enterSplit(st.b + 1);
+      else this.enterYao();
+      return;
+    }
+
+    /* 成爻之后 */
+    if (this.yaoIndex >= 5) {
+      const session = dayan.buildSession(this.values);
+      session.id = 's' + Date.now() + Math.floor(Math.random() * 1000);
+      session.createdAt = Date.now();
+      getApp().globalData.pendingSession = session;
+      wx.redirectTo({ url: '/pages/result/result' });
+      return;
+    }
+    this.yaoIndex += 1;
+    this.pillarInfo = [null, null, null];
+    this.changes = [];
+    this.steps = buildSteps(false);      // 太极已立，此后每爻七步
+    this.enterSplit(0);
+  }
+});
+
+});
+__def('pages/result/result.js', function(module, exports, require){
+__cur = "pages/result/result";
+const hexagrams = require('../../utils/hexagrams.js');
+const store = require('../../utils/store.js');
+
+const LABELS = ['初', '二', '三', '四', '五', '上'];
+
+Page({
+  data: {
+    ready: false,
+    fromHistory: false,
+    saved: false,
+    lines: [],
+    hexName: '',
+    shortName: '',
+    upper: '',
+    lower: '',
+    judgment: '',
+    hasChange: false,
+    changeText: '',
+    changedName: '',
+    changedJudgment: '',
+    timeText: ''
+  },
+
+  onLoad: function (options) {
+    let session = null;
+    if (options && options.id) {
+      session = store.get(options.id);
+      this.setData({ fromHistory: true, saved: true });
+    } else {
+      session = getApp().globalData.pendingSession;
+    }
+
+    if (!session) {
+      wx.showToast({ title: '占例不存在', icon: 'none' });
+      setTimeout(function () {
+        wx.reLaunch({ url: '/pages/index/index' });
+      }, 800);
+      return;
+    }
+
+    this.session = session;
+    this.render(session);
+  },
+
+  render: function (session) {
+    const values = session.values || [];
+    const hex = session.hex || hexagrams.buildHexagram(values);
+    const lines = [];
+    for (let i = 5; i >= 0; i--) {
+      const v = values[i];
+      const info = v === 6 ? { yang: false, symbol: '⚋' }
+        : v === 9 ? { yang: true, symbol: '⚊' }
+          : v === 8 ? { yang: false, symbol: '⚋' }
+            : { yang: true, symbol: '⚊' };
+      lines.push({
+        label: LABELS[i],
+        yang: info.yang,
+        changing: v === 6 || v === 9,
+        valueText: v + ' ' + info.symbol
+      });
+    }
+
+    const changed = session.changed;
+    this.setData({
+      ready: true,
+      lines: lines,
+      hexName: hex.name,
+      shortName: hex.shortName,
+      upper: hex.upperSymbol + ' ' + hex.upper + '（上）',
+      lower: hex.lowerSymbol + ' ' + hex.lower + '（下）',
+      judgment: hex.judgment,
+      hasChange: !!changed,
+      changeText: (session.changeLabels || []).join('、'),
+      changedName: changed ? changed.name : '',
+      changedJudgment: changed ? changed.judgment : '',
+      timeText: store.formatTime(session.createdAt)
+    });
+  },
+
+  onSave: function () {
+    if (!this.session) return;
+    const res = store.save(this.session);
+    if (res.error) {
+      wx.showToast({ title: '保存失败，请重试', icon: 'none' });
+      return;
+    }
+    this.setData({ saved: true });
+    wx.showToast({ title: '已存入占例', icon: 'success' });
+  },
+
+  onRestart: function () {
+    wx.reLaunch({ url: '/pages/index/index' });
+  },
+
+  onHistory: function () {
+    wx.navigateTo({ url: '/pages/history/history' });
+  }
+});
+
+});
+__def('pages/history/history.js', function(module, exports, require){
+__cur = "pages/history/history";
+const store = require('../../utils/store.js');
+
+Page({
+  data: {
+    list: [],
+    empty: true
+  },
+
+  onShow: function () {
+    this.loadList();
+  },
+
+  loadList: function () {
+    const all = store.list();
+    const list = all.map(function (item) {
+      const hex = item.hex || {};
+      const changed = item.changed;
+      return {
+        id: item.id,
+        name: hex.name || '未知卦',
+        shortName: hex.shortName || '',
+        changedName: changed ? changed.name : '',
+        changeText: (item.changeLabels || []).join('、'),
+        timeText: store.formatTime(item.createdAt)
+      };
+    });
+    this.setData({ list: list, empty: list.length === 0 });
+  },
+
+  onOpen: function (e) {
+    const id = e.currentTarget.dataset.id;
+    wx.navigateTo({ url: '/pages/result/result?id=' + id });
+  },
+
+  onDelete: function (e) {
+    const id = e.currentTarget.dataset.id;
+    const that = this;
+    wx.showModal({
+      title: '删除占例',
+      content: '删除后不可恢复，确定删除？',
+      confirmColor: '#e0402f',
+      success: function (res) {
+        if (!res.confirm) return;
+        store.remove(id);
+        that.loadList();
+        wx.showToast({ title: '已删除', icon: 'none' });
+      }
+    });
+  },
+
+  onBack: function () {
+    wx.reLaunch({ url: '/pages/index/index' });
+  }
+});
+
+});
+__req('app.js');
+__req('pages/index/index.js');
+__req('pages/divine/divine.js');
+__req('pages/result/result.js');
+__req('pages/history/history.js');
+__boot();

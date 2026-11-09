@@ -1,0 +1,17 @@
+# 构建中间产物（可由 tools/build.py 一键重建）
+/build/
+*.class
+*.idsig
+*.log
+
+# 本地自签名密钥：绝不入库，clone 后 build.py 会自动生成新密钥
+dayan.jks
+*.jks
+*.keystore
+
+# 系统 / 编辑器
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.pyc

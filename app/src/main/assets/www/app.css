@@ -1,0 +1,1346 @@
+/* WebView 基座：抹平浏览器默认样式，rpx 由 html font-size 提供 */
+html, body { margin:0; padding:0; width:100%; height:100%; overflow-x:hidden; }
+* { -webkit-tap-highlight-color: transparent; -webkit-user-select:none; user-select:none; }
+button { appearance:none; -webkit-appearance:none; border:0; border-radius:0;
+  background:transparent; color:inherit; font:inherit; line-height:normal;
+  padding:0; margin:0; text-align:center; }
+canvas { display:block; }
+.circl, .ink { touch-action:none; }
+#app { min-height:100%; }
+
+/* ===== app.wxss ===== */
+html, body {
+  min-height: 100%;
+  background: #f5f6f8;
+  color: #15171c;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  font-size: 0.28rem;
+  -webkit-font-smoothing: antialiased;
+}
+
+.serif {
+  font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 0.4rem 0.32rem 0.6rem;
+  box-sizing: border-box;
+}
+
+/* ============ 球 ============ */
+.ball {
+  position: absolute;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 0.03rem solid #15171c;
+  box-sizing: border-box;
+  box-shadow: 0 0.02rem 0.04rem rgba(21, 23, 28, 0.16);
+}
+
+.ball.dark {
+  background: #15171c;
+  border-color: #15171c;
+  box-shadow: 0 0.03rem 0.08rem rgba(21, 23, 28, 0.32);
+}
+
+.ball.hole {
+  background: transparent;
+  border: 0.03rem dashed #aab0b8;
+  box-shadow: none;
+}
+
+/* ============ 按钮 ============ */
+.btn {
+  margin-top: 0.28rem;
+  height: 0.96rem;
+  line-height: 0.96rem;
+  border-radius: 0.24rem;
+  font-size: 0.3rem;
+  letter-spacing: 0.08rem;
+  background: #e0402f;
+  color: #ffffff;
+  text-align: center;
+  box-shadow: 0 0.08rem 0.24rem rgba(224, 64, 47, 0.28);
+  padding: 0;
+}
+
+.btn::after {
+  border: none;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: #15171c;
+  border: 0.02rem solid #15171c;
+  box-shadow: none;
+}
+
+.btn.is-disabled {
+  background: #e7e9ec;
+  color: #a8adb4;
+  box-shadow: none;
+}
+
+.btn.ghost.is-disabled {
+  background: transparent;
+  color: #a8adb4;
+  border-color: #dcdfe4;
+}
+
+/* ============ 通用文字 ============ */
+.sec-title {
+  text-align: center;
+  font-size: 0.38rem;
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+}
+
+.rule {
+  width: 0.72rem;
+  height: 0.06rem;
+  background: #e0402f;
+  border-radius: 0.04rem;
+  margin: 0.14rem auto 0.2rem;
+}
+
+.hint {
+  text-align: center;
+  font-size: 0.24rem;
+  color: #71767f;
+  line-height: 1.9;
+}
+
+.hint-sub {
+  display: block;
+  color: #9aa1a8;
+}
+
+.img-note {
+  margin-top: 0.16rem;
+  text-align: center;
+  font-size: 0.21rem;
+  color: #a2a6ad;
+  line-height: 1.7;
+}
+
+.card {
+  background: #ffffff;
+  border: 0.02rem solid #eceef1;
+  border-radius: 0.28rem;
+  padding: 0.26rem;
+  box-shadow: 0 0.02rem 0.06rem rgba(21, 23, 28, 0.04);
+}
+
+/* ============ 进度条 ============ */
+.stepbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fafbfc;
+  border: 0.02rem solid #eceef1;
+  border-radius: 0.24rem;
+  padding: 0.14rem 0.22rem;
+  margin-bottom: 0.26rem;
+}
+
+.yaos {
+  display: flex;
+}
+
+.yao-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-right: 0.1rem;
+  border-radius: 50%;
+  border: 0.02rem solid #dcdfe4;
+  color: #b6bac1;
+  font-size: 0.2rem;
+  line-height: 0.38rem;
+  text-align: center;
+  background: #ffffff;
+}
+
+.yao-dot.done {
+  background: #15171c;
+  border-color: #15171c;
+  color: #ffffff;
+}
+
+.yao-dot.cur {
+  border: 0.03rem solid #e0402f;
+  color: #e0402f;
+  font-weight: 700;
+}
+
+.bians {
+  display: flex;
+  align-items: center;
+}
+
+.bian-text {
+  font-size: 0.22rem;
+  color: #71767f;
+  margin-right: 0.1rem;
+}
+
+.bian-seg {
+  width: 0.28rem;
+  height: 0.08rem;
+  border-radius: 0.06rem;
+  background: #dcdfe4;
+  margin-left: 0.06rem;
+}
+
+.bian-seg.on {
+  background: #15171c;
+}
+
+/* ============ 计数胶囊 ============ */
+.chips {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.2rem;
+}
+
+.chip {
+  border: 0.02rem solid #15171c;
+  border-radius: 9.99rem;
+  padding: 0.04rem 0.22rem;
+  font-size: 0.24rem;
+  margin: 0 0.08rem;
+  background: #ffffff;
+}
+
+.chip.sum {
+  background: #e0402f;
+  border-color: #e0402f;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.chip.dark-chip {
+  background: #15171c;
+  border-color: #15171c;
+  color: #ffffff;
+}
+
+/* ============ 锁定提示 ============ */
+.lock {
+  margin-top: 0.2rem;
+  font-size: 0.22rem;
+  line-height: 1.7;
+  color: #e0402f;
+  background: #fdeeeb;
+  border: 0.02rem dashed #e0402f;
+  border-radius: 0.2rem;
+  padding: 0.16rem 0.2rem;
+  text-align: center;
+}
+
+/* ===== pages/result/result.wxss ===== */
+.hex {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 0.3rem;
+}
+
+.hex-line {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.14rem;
+}
+
+.hex-label {
+  width: 0.44rem;
+  text-align: right;
+  font-size: 0.24rem;
+  color: #71767f;
+  margin-right: 0.18rem;
+  font-family: "Songti SC", "STSong", serif;
+}
+
+.hex-bars {
+  width: 2.4rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.bar {
+  width: 2.4rem;
+  height: 0.18rem;
+  background: #15171c;
+  border-radius: 0.04rem;
+}
+
+.bar.half {
+  width: 1.08rem;
+}
+
+.bar.changing {
+  background: #e0402f;
+}
+
+.yin {
+  width: 2.4rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.hex-val {
+  width: 0.9rem;
+  font-size: 0.22rem;
+  color: #15171c;
+  margin-left: 0.18rem;
+}
+
+.hex-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.34rem;
+}
+
+.seal {
+  width: 0.72rem;
+  height: 0.72rem;
+  line-height: 1.15;
+  border-radius: 0.14rem;
+  background: #e0402f;
+  color: #ffffff;
+  font-size: 0.24rem;
+  text-align: center;
+  padding: 0.08rem 0.06rem;
+  box-sizing: border-box;
+  margin-right: 0.18rem;
+  box-shadow: 0 0.06rem 0.14rem rgba(224, 64, 47, 0.32);
+}
+
+.hex-name {
+  font-size: 0.42rem;
+  font-weight: 700;
+  letter-spacing: 0.06rem;
+}
+
+.trigrams {
+  margin-top: 0.1rem;
+  text-align: center;
+  font-size: 0.22rem;
+  color: #71767f;
+  letter-spacing: 0.02rem;
+}
+
+.juan {
+  margin-top: 0.34rem;
+  background: #ffffff;
+  border: 0.02rem solid #eceef1;
+  border-radius: 0.24rem;
+  padding: 0.26rem;
+  box-shadow: 0 0.02rem 0.06rem rgba(21, 23, 28, 0.04);
+}
+
+.juan-label {
+  display: block;
+  font-size: 0.21rem;
+  color: #e0402f;
+  letter-spacing: 0.04rem;
+  margin-bottom: 0.12rem;
+}
+
+.juan-text {
+  display: block;
+  font-size: 0.3rem;
+  line-height: 1.9;
+  letter-spacing: 0.02rem;
+}
+
+.change-card {
+  margin-top: 0.22rem;
+  background: #fafbfc;
+  border: 0.02rem solid #eceef1;
+  border-radius: 0.24rem;
+  padding: 0.24rem;
+}
+
+.change-title {
+  display: block;
+  font-size: 0.24rem;
+  color: #15171c;
+  letter-spacing: 0.01rem;
+}
+
+.change-to {
+  display: flex;
+  align-items: center;
+  margin-top: 0.14rem;
+}
+
+.change-to-label {
+  font-size: 0.21rem;
+  color: #71767f;
+  margin-right: 0.14rem;
+}
+
+.change-to-name {
+  font-size: 0.32rem;
+  font-weight: 700;
+  letter-spacing: 0.03rem;
+}
+
+.change-judge {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.26rem;
+  color: #15171c;
+  line-height: 1.8;
+}
+
+.change-tip {
+  display: block;
+  margin-top: 0.12rem;
+  font-size: 0.21rem;
+  color: #a2a6ad;
+  line-height: 1.7;
+}
+
+.time-line {
+  margin-top: 0.22rem;
+  text-align: center;
+  font-size: 0.21rem;
+  color: #a2a6ad;
+}
+
+/* ===== pages/divine/divine.wxss ===== */
+.dpage {
+  padding: 0.22rem 0.18rem 0.4rem;
+}
+
+.serif {
+  font-family: "Songti SC", "STSong", serif;
+}
+
+/* ================= 头部 ================= */
+.dhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.14rem;
+}
+
+.dh-t {
+  font-size: 0.3rem;
+  font-weight: 700;
+  letter-spacing: 0.06rem;
+}
+
+.dh-m {
+  font-size: 0.2rem;
+  color: #71767f;
+  letter-spacing: 0.01rem;
+}
+
+/* ================= 六爻记录带 ================= */
+.record {
+  display: flex;
+  margin-bottom: 0.12rem;
+}
+
+.rec {
+  flex: 1;
+  position: relative;
+  margin-right: 0.08rem;
+  padding: 0.1rem 0 0.08rem;
+  border: 0.02rem solid #eceef1;
+  border-radius: 0.14rem;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.rec:last-child {
+  margin-right: 0;
+}
+
+.rec-k {
+  font-size: 0.18rem;
+  color: #b6bac1;
+  letter-spacing: 0.02rem;
+  line-height: 1;
+}
+
+.rec-v {
+  margin-top: 0.08rem;
+  height: 0.3rem;
+  line-height: 0.3rem;
+  font-size: 0.22rem;
+  color: #c9ccd2;
+}
+
+.rec.has {
+  border-color: #dcdfe4;
+}
+
+.rec.has .rec-k {
+  color: #71767f;
+}
+
+.rec.has .rec-v {
+  color: #15171c;
+  font-weight: 700;
+}
+
+.rec.cur {
+  border-color: #e0402f;
+  background: #fdeeeb;
+  box-shadow: 0 0 0 0.04rem rgba(224, 64, 47, 0.08);
+}
+
+.rec.cur .rec-k,
+.rec.cur .rec-v {
+  color: #e0402f;
+  font-weight: 700;
+}
+
+/* 九 / 六 标「变」 */
+.rec-b {
+  position: absolute;
+  top: 0.04rem;
+  right: 0.06rem;
+  font-size: 0.14rem;
+  line-height: 1;
+  color: #e0402f;
+  letter-spacing: 0;
+}
+
+/* ================= 挂一 · 太极 ================= */
+.taiji {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.12rem;
+  padding: 0.12rem 0.18rem 0.12rem 0.26rem;
+  border: 0.02rem solid #15171c;
+  border-radius: 0.18rem;
+  background: #ffffff;
+  box-shadow: 0 0.04rem 0.16rem rgba(21, 23, 28, 0.08);
+  overflow: hidden;
+}
+
+/* 左侧竖条：强调「这一策自始至终在场」 */
+.taiji::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0.06rem;
+  background: #15171c;
+}
+
+/* 未拈出之前只留一个淡虚位，不预先摆那颗黑球 */
+.tj-ring {
+  width: 0.78rem;
+  height: 0.78rem;
+  flex: 0 0 0.78rem;
+  margin-right: 0.18rem;
+  border: 0.02rem dashed #dcdfe4;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 太极既立，虚线圈才缓缓呼吸 */
+.taiji.on .tj-ring {
+  border-color: #15171c;
+  animation: tjbreath 3.6s ease-in-out infinite;
+}
+
+@keyframes tjbreath {
+  0%, 100% {
+    border-color: rgba(21, 23, 28, 0.28);
+    transform: scale(1);
+  }
+  50% {
+    border-color: rgba(21, 23, 28, 0.85);
+    transform: scale(1.05);
+  }
+}
+
+.tj-ball {
+  width: 0.46rem;
+  height: 0.46rem;
+  border-radius: 50%;
+  background: #15171c;
+  box-shadow: 0 0.04rem 0.12rem rgba(21, 23, 28, 0.45);
+  opacity: 0;
+  transform: scale(0.32);
+  transition: opacity 0.18s ease, transform 0.28s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+/* 飞球落定的同一瞬显形，尺寸位置与飞球完全一致，接缝看不出来 */
+.taiji.on .tj-ball {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.tj-txt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tj-t {
+  font-size: 0.26rem;
+  font-weight: 700;
+  letter-spacing: 0.04rem;
+  color: #15171c;
+  line-height: 1.2;
+}
+
+.tj-n {
+  margin-top: 0.06rem;
+  font-size: 0.17rem;
+  color: #8b9099;
+  letter-spacing: 0.005rem;
+  line-height: 1.3;
+}
+
+.tj-tag {
+  flex: 0 0 auto;
+  margin-left: 0.1rem;
+  padding: 0.04rem 0.12rem;
+  border-radius: 9.99rem;
+  background: #f2f3f5;
+  color: #8b9099;
+  font-size: 0.16rem;
+  letter-spacing: 0.03rem;
+  line-height: 1.4;
+}
+
+.taiji.on .tj-tag {
+  background: #fdeeeb;
+  color: #e0402f;
+}
+
+/* ================= 席上策数：球堆外左上角 ================= */
+.pile-tag {
+  position: absolute;
+  left: -0.08rem;
+  top: -0.1rem;
+  z-index: 9;
+  display: flex;
+  align-items: baseline;
+  padding: 0.06rem 0.14rem 0.07rem;
+  border: 0.02rem solid #15171c;
+  border-radius: 0.12rem;
+  background: #ffffff;
+  box-shadow: 0 0.04rem 0.12rem rgba(21, 23, 28, 0.10);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.pile-cap {
+  margin-right: 0.08rem;
+  font-size: 0.15rem;
+  color: #8b9099;
+  letter-spacing: 0.01rem;
+}
+
+.pile-n {
+  font-size: 0.3rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #15171c;
+}
+
+.pile-u {
+  margin-left: 0.04rem;
+  font-size: 0.16rem;
+  color: #71767f;
+}
+
+/* ================= 主体 ================= */
+.dbody {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* ---------- 圆席 ---------- */
+.cwrap {
+  position: relative;
+  margin-right: 0.06rem;
+  flex: 0 0 auto;
+}
+
+.circl {
+  position: relative;
+  border: 0.02rem solid #dcdfe4;
+  border-radius: 50%;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: inset 0 0.02rem 0.1rem rgba(21, 23, 28, 0.05);
+  box-sizing: border-box;
+}
+
+/* 球 */
+.ball {
+  position: absolute;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 0.02rem solid #15171c;
+  box-sizing: border-box;
+  box-shadow: 0 0.02rem 0.03rem rgba(21, 23, 28, 0.16);
+  transition-property: left, top, background-color, box-shadow, opacity, transform;
+  transition-timing-function: cubic-bezier(0.22, 0.85, 0.3, 1);
+  z-index: 2;
+}
+
+.ball.warn {
+  border-color: #e0402f;
+  background: #fdeeeb;
+  box-shadow: 0 0 0 0.06rem rgba(224, 64, 47, 0.18), 0 0.02rem 0.06rem rgba(224, 64, 47, 0.3);
+  z-index: 3;
+}
+
+/* 球心正好压在分界线上的球：判归属只看球心，用一圈朱红虚环标出来 */
+.ball.edge::after {
+  content: '';
+  position: absolute;
+  left: -0.06rem;
+  top: -0.06rem;
+  right: -0.06rem;
+  bottom: -0.06rem;
+  border-radius: 50%;
+  border: 0.02rem dashed rgba(154, 42, 42, 0.55);
+  pointer-events: none;
+}
+
+.ball.dark {
+  background-color: #15171c;
+  border-color: #15171c;
+  box-shadow: 0 0.03rem 0.08rem rgba(21, 23, 28, 0.42);
+}
+
+/* 归奇已离席：原位留一个虚线小圈，标明这几策是从哪儿扐出去的 */
+.ball.ghost {
+  background-color: transparent;
+  border: 0.02rem dashed rgba(21, 23, 28, 0.42);
+  box-shadow: none;
+  transform: scale(0.62);
+  transition-duration: 320ms !important;
+}
+
+/* 彻底离席（下一变重铺时才会用到） */
+.ball.gone {
+  opacity: 0;
+  transform: scale(0.45);
+  transition-duration: 300ms !important;
+}
+
+/* 重新出场的球（洗牌时补回来的） */
+.ball.pop {
+  animation: ballpop 0.42s ease both;
+}
+
+@keyframes ballpop {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 画布：你画的线 + 手绘圈 */
+.ink {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+}
+
+/* 左 / 右角标：避开左上角那枚「在席 N 策」标签 */
+.dtag {
+  position: absolute;
+  top: 0.58rem;
+  z-index: 7;
+  padding: 0.04rem 0.14rem;
+  border-radius: 9.99rem;
+  background: #ffffff;
+  border: 0.02rem solid #dcdfe4;
+  font-size: 0.16rem;
+  color: #71767f;
+  letter-spacing: 0.01rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.dtag.on {
+  opacity: 1;
+}
+
+.dtag-l {
+  left: 0.12rem;
+}
+
+.dtag-r {
+  right: 0.12rem;
+}
+
+.dtag-b {
+  color: #15171c;
+  font-weight: 700;
+}
+
+/* ---------- 成爻 ---------- */
+.yao-calc {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeup 0.42s ease both;
+}
+
+@keyframes fadeup {
+  from {
+    opacity: 0;
+    transform: translateY(0.1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.yc-cap {
+  font-size: 0.18rem;
+  color: #71767f;
+  letter-spacing: 0.06rem;
+}
+
+.yc-eq {
+  font-size: 0.22rem;
+  color: #71767f;
+  margin-top: 0.06rem;
+}
+
+.yc-num {
+  font-size: 1.32rem;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-top: 0.04rem;
+}
+
+.yao-line {
+  width: 0.96rem;
+  height: 0.14rem;
+  margin-top: 0.1rem;
+}
+
+.yao-line.yang {
+  background: #15171c;
+  border-radius: 0.02rem;
+}
+
+.yao-line.yin {
+  display: flex;
+  justify-content: space-between;
+}
+
+.yao-line.yin::before,
+.yao-line.yin::after {
+  content: "";
+  width: 0.38rem;
+  height: 0.14rem;
+  background: #15171c;
+  border-radius: 0.02rem;
+}
+
+/* ---------- 三变柱：黑球自上而下计归奇，三段留空当 ---------- */
+.pillars {
+  width: 1.12rem;
+  flex: 0 0 1.12rem;
+  display: flex;
+  align-self: center;
+  padding-top: 0;
+}
+
+.pil {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 0.04rem;
+  min-width: 0;
+}
+
+.pil:last-child {
+  margin-right: 0;
+}
+
+.pil-lab {
+  font-size: 0.15rem;
+  color: #b6bac1;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+
+.pil-num {
+  font-size: 0.26rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 0.06rem;
+}
+
+.pil-dots {
+  width: 100%;
+  height: 2rem;
+  margin-top: 0.08rem;
+  padding: 0.1rem 0;
+  border: 0.02rem solid #eceef1;
+  border-radius: 0.12rem;
+  background: #fafbfc;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+/* 归奇落定：实心黑球（自上而下：挂 1 ｜ 右余 ｜ 左余） */
+.bdot {
+  width: 0.12rem;
+  height: 0.12rem;
+  margin-top: 0.04rem;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: #15171c;
+  border: none;
+  flex: 0 0 0.12rem;
+}
+
+/* 尚未归奇：极淡的空位 */
+.bdot.g {
+  background: #e3e6ea;
+}
+
+/* 段与段之间留空当：挂 1 ｜ 右余 ｜ 左余 */
+.bdot.gap {
+  margin-top: 0.12rem;
+}
+
+
+/* ================= 下方步骤轨 ================= */
+.steps {
+  display: flex;
+  align-items: center;
+  margin: 0 0.04rem;
+}
+
+.stp {
+  width: 0.44rem;
+  height: 0.44rem;
+  flex: 0 0 0.44rem;
+  border-radius: 50%;
+  border: 0.02rem solid #dcdfe4;
+  background: #ffffff;
+  color: #c3c7cd;
+  font-size: 0.18rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.stp.done {
+  border-color: #15171c;
+  color: #15171c;
+}
+
+.stp.cur {
+  background: #15171c;
+  border-color: #15171c;
+  color: #ffffff;
+  transform: scale(1.08);
+  box-shadow: 0 0.06rem 0.16rem rgba(21, 23, 28, 0.3);
+}
+
+.stp-line {
+  flex: 1;
+  height: 0.02rem;
+  margin: 0 0.04rem;
+  background: #eceef1;
+}
+
+.stp-line.done {
+  background: #15171c;
+}
+
+.stpname {
+  margin-top: 0.2rem;
+  margin-bottom: 0.12rem;
+  text-align: center;
+  font-size: 0.28rem;
+  font-weight: 600;
+  color: #15171c;
+  letter-spacing: 0.03rem;
+}
+
+/* ================= 底部 ================= */
+.dbot {
+  margin-top: 0.18rem;
+}
+
+.dhint {
+  display: block;
+  text-align: center;
+  font-size: 0.2rem;
+  color: #71767f;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+/* 计数 chip */
+.chips {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 0.14rem;
+}
+
+.chip {
+  padding: 0.04rem 0.18rem;
+  margin: 0 0.05rem;
+  border: 0.02rem solid #dcdfe4;
+  border-radius: 9.99rem;
+  background: #ffffff;
+  font-size: 0.2rem;
+  color: #15171c;
+}
+
+.chip.dark-chip {
+  background: #15171c;
+  border-color: #15171c;
+  color: #ffffff;
+}
+
+.chip.sum {
+  background: #e0402f;
+  border-color: #e0402f;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 算式 */
+.formula {
+  margin-top: 0.14rem;
+  padding: 0.14rem 0.1rem;
+  background: #15171c;
+  border-radius: 0.18rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.f-cap {
+  font-size: 0.17rem;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.06rem;
+}
+
+.f-eq {
+  margin-top: 0.06rem;
+  font-size: 0.23rem;
+  color: #ffffff;
+  white-space: nowrap;
+  letter-spacing: 0.005rem;
+}
+
+.f-note {
+  margin-top: 0.06rem;
+  font-size: 0.17rem;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.005rem;
+}
+
+/* 按钮 */
+.btn {
+  margin-top: 0.18rem;
+  width: 100%;
+  padding: 0.22rem 0;
+  border-radius: 0.2rem;
+  background: #e0402f;
+  color: #ffffff;
+  font-size: 0.28rem;
+  letter-spacing: 0.08rem;
+  font-weight: 600;
+  height: auto;
+  line-height: 1.2;
+  box-shadow: 0 0.08rem 0.24rem rgba(224, 64, 47, 0.26);
+}
+
+.btn::after {
+  border: none;
+}
+
+.btn.wait {
+  background: #f0f1f3;
+  color: #a8adb5;
+  box-shadow: none;
+}
+
+.lock {
+  margin-top: 0.16rem;
+  padding: 0.12rem;
+  border: 0.02rem dashed #e0402f;
+  border-radius: 0.14rem;
+  background: #fdeeeb;
+  font-size: 0.19rem;
+  color: #e0402f;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.relink {
+  margin-top: 0.16rem;
+  text-align: center;
+  font-size: 0.2rem;
+  color: #71767f;
+  text-decoration: underline;
+}
+
+/* ================= 飞球 ================= */
+.flyball {
+  position: fixed;
+  z-index: 99;
+  border-radius: 50%;
+  background: #15171c;
+  border: 0.02rem solid transparent;
+  box-sizing: border-box;
+  box-shadow: 0 0.03rem 0.1rem rgba(21, 23, 28, 0.45);
+  transition-property: transform, background-color, border-color, box-shadow;
+  transition-timing-function: cubic-bezier(0.45, 0.05, 0.25, 1);
+  pointer-events: none;
+}
+
+/* 落定：收成柱内那颗实心小黑球 */
+.flyball.land {
+  background-color: #15171c;
+  border: none;
+  box-shadow: none;
+}
+
+/* ===== pages/history/history.wxss ===== */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.8rem 0.2rem;
+}
+
+.empty-icon {
+  font-size: 0.9rem;
+  color: #dcdfe4;
+  line-height: 1;
+}
+
+.empty-title {
+  margin-top: 0.2rem;
+  font-size: 0.3rem;
+  color: #15171c;
+}
+
+.empty-desc {
+  margin-top: 0.1rem;
+  font-size: 0.23rem;
+  color: #a2a6ad;
+}
+
+.empty .btn {
+  width: 100%;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 0.02rem solid #eceef1;
+  border-radius: 0.24rem;
+  padding: 0.26rem 0.24rem;
+  margin-bottom: 0.18rem;
+  box-shadow: 0 0.02rem 0.06rem rgba(21, 23, 28, 0.04);
+}
+
+.item-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.item-name {
+  font-size: 0.32rem;
+  font-weight: 700;
+  letter-spacing: 0.03rem;
+}
+
+.item-sub {
+  margin-top: 0.08rem;
+  font-size: 0.22rem;
+  color: #71767f;
+}
+
+.item-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.seal-sm {
+  width: 0.56rem;
+  height: 0.56rem;
+  line-height: 0.56rem;
+  border-radius: 0.1rem;
+  background: #e0402f;
+  color: #ffffff;
+  font-size: 0.2rem;
+  text-align: center;
+  letter-spacing: 0;
+  box-shadow: 0 0.04rem 0.1rem rgba(224, 64, 47, 0.28);
+}
+
+.item-time {
+  margin-top: 0.08rem;
+  font-size: 0.2rem;
+  color: #a2a6ad;
+}
+
+/* ===== pages/index/index.wxss ===== */
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0.1rem 0 0.26rem;
+}
+
+.hero-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14rem;
+  margin-left: 0.14rem;
+}
+
+.hero-sub {
+  margin-top: 0.12rem;
+  font-size: 0.22rem;
+  color: #71767f;
+  letter-spacing: 0.02rem;
+}
+
+.illu {
+  position: relative;
+  padding-top: 0.66rem;
+  margin-bottom: 0.08rem;
+}
+
+.fly-ball {
+  position: absolute;
+  top: 0.04rem;
+  left: 50%;
+  margin-left: -0.16rem;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 50%;
+  background: #15171c;
+  box-shadow: 0 0.04rem 0.1rem rgba(21, 23, 28, 0.32);
+  z-index: 2;
+}
+
+.fly-arrow {
+  position: absolute;
+  top: 0.38rem;
+  left: 50%;
+  height: 0.34rem;
+  border-left: 0.03rem dashed #15171c;
+}
+
+.mini-field {
+  position: relative;
+  width: 6.86rem;
+  height: 3rem;
+  background: #ffffff;
+  border: 0.02rem solid #dcdfe4;
+  border-radius: 0.28rem;
+  overflow: hidden;
+  margin: 0 auto;
+  box-shadow: inset 0 0.02rem 0.08rem rgba(21, 23, 28, 0.05);
+}
+
+.illu-cap {
+  display: block;
+  margin-top: 0.14rem;
+  text-align: center;
+  font-size: 0.21rem;
+  color: #71767f;
+  letter-spacing: 0.01rem;
+}
+
+.ritual-card {
+  margin-top: 0.26rem;
+  background: #ffffff;
+  border: 0.02rem solid #eceef1;
+  border-radius: 0.28rem;
+  padding: 0.34rem 0.24rem;
+  text-align: center;
+  box-shadow: 0 0.02rem 0.08rem rgba(21, 23, 28, 0.04);
+}
+
+.ritual-line {
+  display: block;
+  font-size: 0.28rem;
+  color: #15171c;
+  line-height: 2;
+  letter-spacing: 0.02rem;
+}
+
+.ritual-strong {
+  display: block;
+  font-size: 0.36rem;
+  font-weight: 700;
+  color: #e0402f;
+  letter-spacing: 0.06rem;
+  line-height: 1.8;
+}
+
+.tips {
+  margin-top: 0.22rem;
+  text-align: center;
+  font-size: 0.23rem;
+  color: #71767f;
+  line-height: 1.8;
+}
+
+.tips.sub {
+  margin-top: 0;
+  color: #a2a6ad;
+}
