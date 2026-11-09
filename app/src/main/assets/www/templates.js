@@ -182,6 +182,9 @@ window.__T["pages/divine/divine"] = function (d) {
     return __h5; });
     __h0 += "</div>";
     __h0 += "<div" + " class=\""+"dbot"+"\"" + ">";
+    __h0 += "<button" + " class=\""+"btn "+__E(btnWait ? 'wait' : '')+"\""+" data-ev=\""+"tap:onNext"+"\"" + ">";
+    __h0 += __E(btnText);
+    __h0 += "</button>";
     __h0 += "<span" + " class=\""+"dhint"+"\"" + ">";
     __h0 += __E(hint);
     __h0 += "</span>";
@@ -207,9 +210,6 @@ window.__T["pages/divine/divine"] = function (d) {
     __h0 += "</span>";
     __h0 += "</div>";
     }
-    __h0 += "<button" + " class=\""+"btn "+__E(btnWait ? 'wait' : '')+"\""+" data-ev=\""+"tap:onNext"+"\"" + ">";
-    __h0 += __E(btnText);
-    __h0 += "</button>";
     if (stepKey === 'hang') {
     __h0 += "<div" + " class=\""+"lock"+"\"" + ">";
     __h0 += "此步不可跳过 —— 须你亲自点「下一步」，太极之策方自席上拈出";
