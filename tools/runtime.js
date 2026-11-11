@@ -69,6 +69,12 @@
       var b = n.attributes[j];
       if (o.getAttribute(b.name) !== b.value) o.setAttribute(b.name, b.value);
     }
+    /* input 的 value 属性不会自动同步到 property；输入弹层重开时须显式对齐，
+       否则会出现上一次输入残留。 */
+    if (o.nodeName === 'INPUT' && n.hasAttribute('value')) {
+      var v = n.getAttribute('value');
+      if (o.value !== v) o.value = v;
+    }
   }
   function patchNode(o, n) {
     if (o.nodeType === 3) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; return; }
@@ -136,6 +142,10 @@
     if (!tpl) return;
     var root = document.getElementById('app');
     patchChildren(root, fromHTML(tpl(p.data)));
+    /* WebView 不认小程序 input 的 focus 属性；弹层首次出现时主动聚焦。
+       已聚焦时不再重复 focus，避免每次 setData 都重弹软键盘。 */
+    var f = root.querySelector && root.querySelector('input[focus="true"]');
+    if (f && document.activeElement !== f) { try { f.focus(); } catch (e) {} }
     if (!p.__ready) { p.__ready = true; if (p.onReady) p.onReady(); }
   };
 
@@ -223,12 +233,17 @@
       : (type === 'touchend' || type === 'tap' ? [] : [pt(null, native)]);
     var changed = native.changedTouches ? Array.prototype.map.call(native.changedTouches, function (t) { return pt(t); })
       : (native.touches && native.touches.length ? touches : [pt(null, native)]);
-    return {
+    var ev = {
       type: type, timeStamp: native.timeStamp || Date.now(),
       touches: touches, changedTouches: changed, detail: {},
       currentTarget: { dataset: dataset(cur), id: cur && cur.id },
       target: { dataset: dataset(native.target), id: native.target && native.target.id }
     };
+    /* 小程序的 bindinput 事件从 e.detail.value 取值 */
+    if (type === 'input' && native.target && native.target.value != null) {
+      ev.detail.value = native.target.value;
+    }
+    return ev;
   }
   function dispatch(native, type) {
     var p = W.__router.top();
@@ -250,7 +265,7 @@
     return chain.length > 0;
   }
   var longTimer = null, longStart = null;
-  ['touchstart', 'touchmove', 'touchend', 'click'].forEach(function (evt) {
+  ['touchstart', 'touchmove', 'touchend', 'click', 'input'].forEach(function (evt) {
     var type = evt === 'click' ? 'tap' : evt;
     document.addEventListener(evt, function (e) {
       if (evt === 'touchstart') {
@@ -342,6 +357,48 @@
     };
   }
   var toastTimer = null;
+
+  /* ---------- 占例持久化：原生文件为主 + WebView localStorage 为镜像 ----------
+     Android 覆盖安装（升级）会保留 /data/data/<pkg> 下的私有文件与 WebView 数据，
+     但 file:// 页面的 localStorage 依赖系统 WebView，个别机型上可能读不到。
+     故对占例数据双写：
+       写：app 私有 files/dayan_sessions.json ＋ localStorage；
+       读：原生文件优先；原生无有效数据而 localStorage 有数据时，判定为
+           v1.0 只写 localStorage 的旧占例，自动迁移回原生文件。
+     这样「直接覆盖安装新版」不会清空历史，旧版本与后续版本都能读到。
+     浏览器预览/无 bridge 环境自动退回纯 localStorage。 */
+  var SESSION_KEY = 'dayan_sessions_v1';
+
+  function hasBridge() {
+    return !!(W.Android && W.Android.getSessions && W.Android.setSessions);
+  }
+  function encodeVal(v) { return JSON.stringify({ __v: v }); }
+  function decodeVal(raw) {
+    if (raw == null || raw === '') return null;
+    try {
+      var o = JSON.parse(raw);
+      if (o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, '__v')) return o.__v;
+      return o;                                  // 兼容直接存数组的老格式
+    } catch (e) { return null; }
+  }
+  function lsRaw(k) {
+    try { return localStorage.getItem(k); } catch (e) { return null; }
+  }
+  function nativeRaw(k) {
+    if (k !== SESSION_KEY || !hasBridge()) return null;
+    try {
+      var s = W.Android.getSessions();
+      return (s == null || s === '') ? null : String(s);
+    } catch (e) { return null; }
+  }
+  function lsWrite(k, raw) {
+    try { localStorage.setItem(k, raw); } catch (e) {}
+  }
+  function nativeWrite(k, raw) {
+    if (k !== SESSION_KEY || !hasBridge()) return;
+    try { W.Android.setSessions(raw); } catch (e) {}
+  }
+
   W.wx = {
     getWindowInfo: sysInfo,
     getSystemInfoSync: sysInfo,
@@ -362,15 +419,31 @@
     },
     showModal: function (o) {
       o = o || {};
+      /* Android WebView 默认 WebChromeClient 不显示 JS 对话框，
+         MainActivity 已覆盖 onJsConfirm 用原生 AlertDialog 承接。 */
       var ok = window.confirm(o.content || o.title || '');
       if (o.success) o.success({ confirm: ok, cancel: !ok });
     },
-    setStorageSync: function (k, v) { localStorage.setItem(k, JSON.stringify({ __v: v })); },
-    getStorageSync: function (k) {
-      try { var s = localStorage.getItem(k); return s == null ? '' : JSON.parse(s).__v; }
-      catch (e) { return ''; }
+    setStorageSync: function (k, v) {
+      var raw = encodeVal(v);
+      lsWrite(k, raw);
+      nativeWrite(k, raw);                       // 原生与镜像同时更新
     },
-    removeStorageSync: function (k) { localStorage.removeItem(k); },
+    getStorageSync: function (k) {
+      var nRaw = nativeRaw(k), nVal = decodeVal(nRaw);
+      if (nVal != null) return nVal;
+      var lRaw = lsRaw(k), lVal = decodeVal(lRaw);
+      if (lVal != null) {
+        /* 旧版本占例迁移：只在原生侧缺数据或数据损坏时回写一次 */
+        if (k === SESSION_KEY && nVal == null) nativeWrite(k, lRaw);
+        return lVal;
+      }
+      return '';
+    },
+    removeStorageSync: function (k) {
+      try { localStorage.removeItem(k); } catch (e) {}
+      if (k === SESSION_KEY) nativeWrite(k, '');
+    },
     navigateTo: function (o) { W.__router.navigateTo(o.url); },
     redirectTo: function (o) { W.__router.redirectTo(o.url); },
     reLaunch: function (o) { W.__router.reLaunch(o.url); },

@@ -412,6 +412,239 @@ module.exports = {
 };
 
 });
+__def('utils/duanzhan.js', function(module, exports, require){
+// utils/duanzhan.js —— 断占判定（纯函数，无副作用）
+// 依据《刘君祖易断全书·断占总论》：天地之数 55 − 卦之营数 S = r，
+// 按 12 步循环数爻得「宜变之爻」；再看动爻是否相值，并按动爻数切换主断层级。
+// 本模块同时产出成卦结果页所需的完整视图数据，小程序与 Android WebView 共用。
+
+const hexagrams = require('./hexagrams.js');
+const yaoci = require('./yaoci.js');
+
+const LABELS = ['初', '二', '三', '四', '五', '上'];
+const NUM = { 6: '六', 7: '七', 8: '八', 9: '九' };
+// 初→二→三→四→五→上→上→五→四→三→二→初，折返端点各计两次
+const SEQ = [0, 1, 2, 3, 4, 5, 5, 4, 3, 2, 1, 0];
+
+function isChanging(v) { return v === 6 || v === 9; }
+function isYang(v) { return v === 7 || v === 9; }
+
+// 爻题：初九/初六、九二~九五/六二~六五、上九/上六
+function yaoTitle(i, yang) {
+  const n = yang ? '九' : '六';
+  if (i === 0) return '初' + n;
+  if (i === 5) return '上' + n;
+  return n + LABELS[i];
+}
+
+function changeIndexes(values) {
+  const out = [];
+  values.forEach(function (v, i) { if (isChanging(v)) out.push(i); });
+  return out;
+}
+
+// 老阳 9→少阴 8，老阴 6→少阳 7；只翻转指定爻位
+function flipSome(values, idxs) {
+  return values.map(function (v, i) {
+    if (idxs.indexOf(i) < 0) return v;
+    return v === 9 ? 8 : 7;
+  });
+}
+
+function sum(values) {
+  let s = 0;
+  values.forEach(function (v) { s += v; });
+  return s;
+}
+
+function conclusionLine(a) {
+  const n = a.n;
+  const m = a.mainTitle;
+  if (n === 0) return '直接以本卦卦辞卦象占断';
+  if (n === 6) {
+    if (a.specialYong) {
+      return a.yongKey + '「' + yaoci.yongText(a.hex.no) + '」为主断，不用之卦卦辞';
+    }
+    return '以六爻全变之卦的卦辞卦象为主断，并思本卦剧变成之卦的情由';
+  }
+  if (n === 1 && a.matched) return '以本卦' + m + '爻辞为主断，亦应参考变卦的卦辞';
+  if (n === 1) return '以本卦卦辞卦象为主断，该动爻爻辞作变动意向参考';
+  if (n === 2 && a.matched) return '以本卦' + m + '爻辞为主断，另一动爻供参考，并参单变之卦与两爻齐变之卦';
+  if (n === 2) return '以本卦卦辞卦象为主断，两动爻爻辞与齐变之卦列入观察';
+  if (n === 3 && a.matched) return '以本卦' + m + '爻辞为主断，并须考虑三爻齐变之卦的卦象卦辞';
+  if (n === 3) return '本卦与之卦卦辞卦象合参（贞悔相争）';
+  if (a.matched) {
+    return '以' + n + '爻齐变之卦的卦辞卦象为主断，' +
+      (n === 4 ? '加重考虑' : '稍加考虑') + '本卦' + m + '爻辞';
+  }
+  return '径以' + n + '爻齐变之卦的卦辞卦象为主断，并思本卦变至之卦的缘由';
+}
+
+// 12 类场景的核心判定：动爻数 × 宜变之爻是否相值
+function analyze(values) {
+  const changing = changeIndexes(values);
+  const n = changing.length;
+  const S = sum(values);
+  const r = 55 - S;
+  const yi = SEQ[(r - 1) % 12];
+  const matched = changing.indexOf(yi) >= 0;
+  const hex = hexagrams.buildHexagram(values);
+  const labels = changing.map(function (i) { return yaoTitle(i, isYang(values[i])); });
+  const yiTitle = yaoTitle(yi, isYang(values[yi]));
+  const specialYong = (n === 6 && (hex.no === 1 || hex.no === 2));
+  const yongKey = hex.no === 1 ? '用九' : '用六';
+
+  // 0、6 爻变时宜变之爻不参与判断；4、5 爻相值时它只作加权，不另立主断
+  const mainIndex = (n >= 1 && n <= 5 && matched) ? yi : -1;
+  const mainTitle = mainIndex >= 0 ? yaoTitle(mainIndex, isYang(values[mainIndex])) : '';
+  const refIndexes = (n === 6) ? [] : changing.filter(function (i) { return i !== mainIndex; });
+
+  let mode;
+  if (n === 0) mode = 'none';
+  else if (n === 1 && matched) mode = 'merged';
+  else if ((n === 2 || n === 3) && matched) mode = 'dual';
+  else if (n <= 2) mode = 'reference';
+  else if (n === 3) mode = 'contest';
+  else mode = 'primary';
+
+  const a = {
+    values: values, changing: changing, n: n, S: S, r: r, yi: yi,
+    yiTitle: yiTitle, matched: matched, hex: hex, labels: labels,
+    mainIndex: mainIndex, mainTitle: mainTitle, refIndexes: refIndexes,
+    specialYong: specialYong, yongKey: yongKey, mode: mode
+  };
+
+  const line1 = n === 0
+    ? '动爻数量为0，六爻皆七、八而无变爻'
+    : '动爻数量为' + n + '，' + (n === 1 ? '为' : '分别为') + labels.join('、');
+  const line2 = n === 0
+    ? '不必起天地之数，故无宜变之爻可算'
+    : (n === 6
+      ? '六爻全变，宜变之爻已无意义，不必算天地之数'
+      : '卦之营数为' + S + '，算得宜变之爻为' + yiTitle +
+        '，宜变之爻' + (matched ? '为动爻' : '非动爻（此位为静爻）'));
+  a.lines = [line1, line2, conclusionLine(a)];
+  return a;
+}
+
+// 本卦卡片：卦象（自上而下）＋ 卦辞 ＋ 六爻爻辞（自上而下：上→初，与卦象同序）
+function benView(values, a) {
+  const h = a.hex;
+  const texts = yaoci.yaoTexts(h.no);
+  const lines = [];
+  for (let i = 5; i >= 0; i--) {
+    lines.push({
+      label: LABELS[i],
+      yang: isYang(values[i]),
+      changing: isChanging(values[i]),
+      isYi: (a.n > 0 && a.n < 6 && a.yi === i),
+      isMain: (a.mainIndex === i),
+      valueText: NUM[values[i]] + (isYang(values[i]) ? ' ⚊' : ' ⚋')
+    });
+  }
+  const yaoList = [];
+  for (let i = 5; i >= 0; i--) {
+    yaoList.push({
+      title: yaoTitle(i, isYang(values[i])),
+      text: texts[i] || '',
+      prefix: a.mainIndex === i ? '（主断）' : (a.refIndexes.indexOf(i) >= 0 ? '（参考）' : ''),
+      isMain: a.mainIndex === i,
+      isRef: a.refIndexes.indexOf(i) >= 0
+    });
+  }
+  // 乾、坤六爻全变时，用九／用六替代之卦卦辞，列于六爻之后
+  if (a.specialYong) {
+    yaoList.push({
+      title: a.yongKey, text: yaoci.yongText(h.no), prefix: '（主断）',
+      isMain: true, isRef: false
+    });
+  }
+  return {
+    name: h.name,
+    shortName: h.shortName,
+    judgment: h.judgment,
+    upper: h.upperSymbol + ' ' + h.upper + '（上）',
+    lower: h.lowerSymbol + ' ' + h.lower + '（下）',
+    tag: h.name + ' · 贞',
+    lines: lines,
+    yaoList: yaoList
+  };
+}
+
+// 之卦卡片：小卦象（自上而下）＋ 完整卦辞 ＋ 六爻爻辞（自上而下：上→初）
+function bianCard(values, flipIdx, title, badge, style) {
+  const flipped = flipSome(values, flipIdx);
+  const h = hexagrams.buildHexagram(flipped);
+  const texts = yaoci.yaoTexts(h.no);
+  const miniLines = [];
+  for (let i = 5; i >= 0; i--) {
+    miniLines.push({ key: 'y' + i, yang: isYang(flipped[i]), changed: flipIdx.indexOf(i) >= 0 });
+  }
+  const yaoList = [];
+  for (let i = 5; i >= 0; i--) {
+    yaoList.push({
+      title: yaoTitle(i, isYang(flipped[i])),
+      text: texts[i] || '',
+      changed: flipIdx.indexOf(i) >= 0
+    });
+  }
+  return {
+    title: title, badge: badge, name: h.name, shortName: h.shortName,
+    judgment: h.judgment, miniLines: miniLines, yaoList: yaoList,
+    primary: style === 'primary', mute: style === 'mute'
+  };
+}
+
+// 页面视图数据：三行总结 / 本卦 / 变卦
+function buildResult(values) {
+  const a = analyze(values);
+  const summaryLines = [
+    { key: '动爻', text: a.lines[0], last: false },
+    { key: '宜变', text: a.lines[1], last: false },
+    { key: '结论', text: a.lines[2], last: true }
+  ];
+
+  const cards = [];
+  if (a.mode === 'dual') {
+    cards.push(bianCard(values, [a.mainIndex], '单爻变卦', '仅' + a.mainTitle + '变', ''));
+    cards.push(bianCard(values, a.changing, '多爻齐变卦', a.labels.join('、') + '齐变', ''));
+  } else if (a.mode !== 'none') {
+    const badge = a.mode === 'primary'
+      ? (a.specialYong ? a.yongKey + '为主断' : '主断依据')
+      : a.mode === 'contest' ? '与本卦合参'
+        : a.mode === 'reference' ? '仅作参考' : '单变＝齐变';
+    const title = a.mode === 'merged' ? '变卦' : '多爻齐变卦';
+    const style = a.mode === 'primary' ? (a.specialYong ? '' : 'primary')
+      : a.mode === 'reference' ? 'mute' : '';
+    cards.push(bianCard(values, a.changing, title, badge, style));
+  }
+
+  return {
+    summaryLines: summaryLines,
+    ben: benView(values, a),
+    bian: {
+      mode: a.mode,
+      tag: a.mode === 'none' ? '无变爻' : (a.mode === 'dual' ? '须分看两卦' : '悔卦'),
+      cards: cards
+    },
+    analysis: {
+      n: a.n, S: a.S, r: a.r, yi: a.yi, yiTitle: a.yiTitle,
+      matched: a.matched, mode: a.mode, mainIndex: a.mainIndex,
+      specialYong: a.specialYong, labels: a.labels, lines: a.lines
+    }
+  };
+}
+
+module.exports = {
+  analyze: analyze,
+  buildResult: buildResult,
+  yaoTitle: yaoTitle,
+  changeIndexes: changeIndexes,
+  flipSome: flipSome,
+  SEQ: SEQ
+};
+
+});
 __def('utils/hexagrams.js', function(module, exports, require){
 // utils/hexagrams.js —— 六十四卦查表（通行本）
 // 卦由下而上：下卦 = 初二三爻，上卦 = 四五六爻
@@ -1121,13 +1354,30 @@ module.exports = {
 });
 __def('utils/store.js', function(module, exports, require){
 // utils/store.js —— 占例本地存储
+// KEY 一旦发布就不要改：小程序端为 wx storage，Android 端由 runtime 映射到
+// app 私有文件 + WebView localStorage。改 KEY 会让旧版本占例读不出来。
 const KEY = 'dayan_sessions_v1';
 const MAX = 100;
+
+// 向后兼容：旧版本记录没有 question 等字段时补默认值，且保留记录上的其它
+// 字段原样（未来版本新增字段也不会被这里抹掉）。
+function normalize(item) {
+  if (!item || typeof item !== 'object') return null;
+  const r = Object.assign({}, item);
+  r.id = r.id || ('s' + (r.createdAt || Date.now()));
+  r.createdAt = r.createdAt || Date.now();
+  if (!Array.isArray(r.values)) r.values = [];
+  if (!Array.isArray(r.changeLabels)) r.changeLabels = [];
+  if (typeof r.question !== 'string') r.question = '';
+  else r.question = r.question.trim();
+  return r;
+}
 
 function list() {
   try {
     const all = wx.getStorageSync(KEY);
-    return Array.isArray(all) ? all : [];
+    if (!Array.isArray(all)) return [];
+    return all.map(normalize).filter(function (x) { return !!x; });
   } catch (e) {
     return [];
   }
@@ -1135,10 +1385,10 @@ function list() {
 
 function save(session) {
   const all = list();
-  const record = Object.assign({}, session, {
+  const record = normalize(Object.assign({}, session, {
     id: session.id || ('s' + Date.now() + Math.floor(Math.random() * 10000)),
     createdAt: session.createdAt || Date.now()
-  });
+  }));
   const rest = all.filter(function (item) { return item.id !== record.id; });
   rest.unshift(record);
   try {
@@ -1167,6 +1417,24 @@ function remove(id) {
   return { data: true, error: null };
 }
 
+// 只改所占事项，不动卦象数据（供后续版本扩展）
+function setQuestion(id, question) {
+  const all = list();
+  let hit = false;
+  const next = all.map(function (item) {
+    if (item.id !== id) return item;
+    hit = true;
+    return Object.assign({}, item, { question: String(question || '').trim() });
+  });
+  if (!hit) return { data: null, error: 'NOT_FOUND' };
+  try {
+    wx.setStorageSync(KEY, next);
+    return { data: true, error: null };
+  } catch (e) {
+    return { data: null, error: 'CLIENT_EXCEPTION' };
+  }
+}
+
 function formatTime(ts) {
   const d = new Date(ts || Date.now());
   const pad = function (n) { return n < 10 ? ('0' + n) : ('' + n); };
@@ -1179,7 +1447,97 @@ module.exports = {
   save: save,
   get: get,
   remove: remove,
+  setQuestion: setQuestion,
   formatTime: formatTime
+};
+
+});
+__def('utils/yaoci.js', function(module, exports, require){
+// utils/yaoci.js —— 六十四卦三百八十四爻爻辞（通行本·简体）
+// 数据来源：freizl/yijing 仓库 zh-CN/64gua.json；古籍原文属公有领域。
+// 按卦序号（1~64）索引，每卦 6 条，顺序为初爻→上爻；已剥离爻题前缀。
+// 乾（1）之「用九」、坤（2）之「用六」单独存于 YONG_TEXTS。
+
+const YAO_TEXTS = {
+  1: ["潜龙，勿用。","见龙在田，利见大人。","君子终日乾乾，夕惕若，厉，无咎。","或跃在渊，无咎。","飞龙在天，利见大人。","亢龙有悔。"], // 乾为天
+  2: ["履霜，坚冰至。","直，方，大，不习无不利。","含章可贞。或从王事，无成有终。","括囊；无咎，无誉。","黄裳，元吉。","龙战于野，其血玄黄。"], // 坤为地
+  3: ["磐桓；利居贞，利建侯。","屯如邅如，乘马班如。匪寇婚媾，女子贞不字，十年乃字。","即鹿无虞，惟入于林中，君子几不如舍，往吝。","乘马班如，求婚媾，往吉，无不利。","屯其膏，小贞吉，大贞凶。","乘马班如，泣血涟如。"], // 水雷屯
+  4: ["发蒙，利用刑人，用说桎梏，以往吝。","包蒙吉；纳妇吉；子克家。","勿用娶女；见金夫，不有躬，无攸利。","困蒙，吝。","童蒙，吉。","击蒙；不利为寇，利御寇。"], // 山水蒙
+  5: ["需于郊。利用恒，无咎。","需于沙。小有言，终吉。","需于泥，致寇至。","需于血，出自穴。","需于酒食，贞吉。","入于穴，有不速之客三人来，敬之终吉。"], // 水天需
+  6: ["不永所事，小有言，终吉。","不克讼，归而逋，其邑人三百户，无眚。","食旧德，贞厉，终吉，或从王事，无成。","不克讼，复即命渝，安贞吉。","讼元吉。","或锡之鞶带，终朝三褫之。"], // 天水讼
+  7: ["师出以律，否臧凶。","在师中吉，无咎，王三锡命。","师或舆尸，凶。","师左次，无咎。","田有禽，利执言，无咎。长子帅师，弟子舆尸，贞凶。","大君有命，开国承家，小人勿用。"], // 地水师
+  8: ["有孚，比之，无咎。有孚盈缶，终来有他，吉。","比之自内，贞吉。","比之匪人。","外比之，贞吉。","显比，王用三驱，失前禽。邑人不诫，吉。","比之无首，凶。"], // 水地比
+  9: ["复自道，何其咎，吉。","牵复，吉。","舆说辐，夫妻反目。","有孚，血去惕出，无咎。","有孚挛如，富以其邻。","既雨既处，尚德载，妇贞厉。月几望，君子征凶。"], // 风天小畜
+  10: ["素履，往无咎。","履道坦坦，幽人贞吉。","眇能视，跛能履，履虎尾，咥人，凶。武人为于大君。","履虎尾，诉诉，终吉。","夬履，贞厉。","视履考祥，其旋元吉。"], // 天泽履
+  11: ["拔茅茹，以其彙，征吉。","包荒，用馮河，不遐遺，朋亡，得尚于中行。","无平不陂，无往不復，艱貞无咎。勿恤其孚，于食有福。","翩翩，不富，以其鄰，不戒以孚。","帝乙歸妹，以祉元吉。","城復于隍，勿用師。自邑告命，貞吝。"], // 地天泰
+  12: ["拔茅茹，以其汇，贞吉亨。","包承。小人吉，大人否，亨。","包羞。","有命，无咎，畴离祉。","休否，大人吉。其亡其亡，系于苞桑。","倾否，先否后喜。"], // 天地否
+  13: ["同人于门，无咎。","同人于宗，吝。","伏戎于莽，升其高陵，三岁不兴。","乘其墉，弗克攻，吉。","同人，先号啕而后笑。大师克相遇。","同人于郊，无悔。"], // 天火同人
+  14: ["无交害，匪咎，艰则无咎。","同人于宗，吝。","公用亨于天子，小人弗克。","匪其彭，无咎。","厥孚交如，威如；吉。","自天佑之，吉无不利。"], // 火天大有
+  15: ["谦谦君子，用涉大川，吉。","鸣谦，贞吉。","劳谦，君子有终，吉。","无不利，撝谦。","不富，以其邻，利用侵伐，无不利。","鸣谦，利用行师，征邑国。"], // 地山谦
+  16: ["鸣豫，凶。","介于石，不终日，贞吉。","盱豫，悔。迟有悔。","由豫，大有得。勿疑。朋盍簪。","贞疾，恒不死。","冥豫，成有渝，无咎。"], // 雷地豫
+  17: ["官有渝，贞吉。出门交有功。","系小子，失丈夫。","系丈夫，失小子。随有求得，利居贞。","随有获，贞凶。有孚在道，以明，何咎。","孚于嘉，吉。","拘系之，乃从维之。王用亨于西山。"], // 泽雷随
+  18: ["干父之蛊，有子，考无咎，厉终吉。","干母之蛊，不可贞。","干父之蛊，小有悔，无大咎。","裕父之蛊，往见吝。","干父之蛊，用誉。","不事王侯，高尚其事。"], // 山风蛊
+  19: ["咸临，贞吉。","咸临，吉无不利。","甘临，无攸利。既忧之，无咎。","至临，无咎。","知临，大君之宜，吉。","敦临，吉无咎。"], // 地泽临
+  20: ["童观，小人无咎，君子吝。","窥观，利女贞。","观我生，进退。","观国之光，利用宾于王。","观我生，君子无咎。","观其生，君子无咎。"], // 风地观
+  21: ["屦校灭趾，无咎。","噬肤灭鼻，无咎。","噬腊肉，遇毒；小吝，无咎。","噬乾胏，得金矢，利艰贞，吉。","噬乾肉，得黄金，贞厉，无咎。","何校灭耳，凶。"], // 火雷噬嗑
+  22: ["贲其趾，舍车而徒。","贲其须。","贲如濡如，永贞吉。","贲如皤如，白马翰如，匪寇婚媾。","贲于丘园，束帛戋戋，吝，终吉。","白贲，无咎。"], // 山火贲
+  23: ["剥床以足，蔑贞凶。","剥床以辨，蔑贞凶。","剥之，无咎。","剥床以肤，凶。","贯鱼，以宫人宠，无不利。","硕果不食，君子得舆，小人剥庐。"], // 山地剥
+  24: ["不复远，无祗悔，元吉。","休复，吉。","频复，厉无咎。","中行独复。","敦复，无悔。","迷复，凶，有灾眚。用行师，终有大败，以其国君，凶；至于十年，不克征。"], // 地雷复
+  25: ["无妄，往吉。","不耕获，不灾畲，则利有攸往。","无妄之灾，或系之牛，行人之得，邑人之灾。","可贞，无咎。","无妄之疾，勿药有喜。","无妄，行有眚，无攸利。"], // 天雷无妄
+  26: ["有厉利已。","舆说輹。","良马逐，利艰贞。曰闲舆卫，利有攸往。","童牛之牿，元吉。","豶豕之牙，吉。","何天之衢，亨。"], // 山天大畜
+  27: ["舍尔灵龟，观我朵颐，凶。","颠颐，拂经，于丘颐，征凶。","拂颐，贞凶，十年勿用，无攸利。","颠颐，吉，虎视眈眈，其欲逐逐，无咎。","拂经，居贞吉，不可涉大川。","由颐，厉吉，利涉大川。"], // 山雷颐
+  28: ["藉用白茅，无咎。","枯杨生稊，老夫得其女妻，无不利。","栋桡，凶。","栋隆，吉；有它吝。","枯杨生华，老妇得士夫，无咎无誉。","过涉灭顶，凶，无咎。"], // 泽风大过
+  29: ["习坎，入于坎窞，凶。","坎有险，求小得。","来之坎坎，险且枕，入于坎窞，勿用。","樽酒簋贰，用缶，纳约自牖，终无咎。","坎不盈，祗既平，无咎。","系用徽纆，置于丛棘，三岁不得，凶。"], // 坎为水
+  30: ["履错然，敬之无咎。","黄离，元吉。","日昃之离，不鼓缶而歌，则大耋之嗟，凶。","突如其来如，焚如，死如，弃如。","出涕沱若，戚嗟若，吉。","王用出征，有嘉折首，获匪其丑，无咎。"], // 离为火
+  31: ["咸其拇。","咸其腓，凶，居吉。","咸其股，执其随，往吝。","贞吉，悔亡，憧憧往来，朋从尔思。","咸其脢，无悔。","咸其辅颊舌。"], // 泽山咸
+  32: ["浚恒，贞凶，无攸利。","悔亡。","不恒其德，或承之羞，贞吝。","田无禽。","恒其德，贞，妇人吉，夫子凶。","振恒，凶。"], // 雷风恒
+  33: ["遯尾，厉，勿用有攸往。","执之用黄牛之革，莫之胜说。","系遯，有疾厉，畜臣妾吉。","好遯，君子吉，小人否。","嘉遯，贞吉。","肥遯，无不利。"], // 天山遁
+  34: ["壮于趾，征凶，有孚。","贞吉。","小人用壮，君子用罔，贞厉。羝羊触藩，羸其角。","贞吉悔亡，藩决不羸，壮于大舆之輹。","丧羊于易，无悔。","羝羊触藩，不能退，不能遂，无攸利，艰则吉。"], // 雷天大壮
+  35: ["晋如，摧如，贞吉。罔孚，裕无咎。","晋如，愁如，贞吉。受兹介福，于其王母。","众允，悔亡。","晋如硕鼠，贞厉。","悔亡，失得勿恤，往吉，无不利。","晋其角，维用伐邑，厉吉无咎，贞吝。"], // 火地晋
+  36: ["明夷于飞，垂其翼。君子于行，三日不食，有攸往，主人有言。","明夷，夷于左股，用拯马壮，吉。","明夷于南狩，得其大首，不可疾贞。","入于左腹，获明夷之心，出于门庭。","箕子之明夷，利贞。","不明晦，初登于天，后入于地。"], // 地火明夷
+  37: ["闲有家，悔亡。","无攸遂，在中馈，贞吉。","家人嗃嗃，悔厉吉；妇子嘻嘻，终吝。","富家，大吉。","王假有家，勿恤，往吉。","有孚威如，终吉。"], // 风火家人
+  38: ["悔亡，丧马勿逐，自复；见恶人无咎。","遇主于巷，无咎。","见舆曳，其牛掣，其人天且劓，无初有终。","睽孤，遇元夫，交孚，厉无咎。","悔亡，厥宗噬肤，往何咎。","睽孤，见豕负涂，载鬼一车，先张之弧，后说之弧，匪寇婚媾，往遇雨则吉。"], // 火泽睽
+  39: ["往蹇，来誉。","王臣蹇蹇，匪躬之故。","往蹇来反。","往蹇来连。","大蹇朋来。","往蹇来硕，吉；利见大人。"], // 水山蹇
+  40: ["无咎。","田获三狐，得黄矢，贞吉。","负且乘，致寇至，贞吝。","解而拇，朋至斯孚。","君子维有解，吉；有孚于小人。","公用射隼于高墉之上，获之，无不利。"], // 雷水解
+  41: ["巳事遄往，无咎，酌损之。","利贞，征凶，弗损，益之。","三人行，则损一人；一人行，则得其友。","损其疾，使遄有喜，无咎。","或益之，十朋之龟弗克违，元吉。","弗损益之，无咎，贞吉，有攸往，得臣无家。"], // 山泽损
+  42: ["利用为大作，元吉，无咎。","或益之，十朋之龟弗克违，永贞吉。王用享于帝，吉。","益之用凶事，无咎。有孚中行，告公用圭。","中行，告公从。利用为依迁国。","有孚惠心，勿问元吉。有孚惠我德。","莫益之，或击之，立心勿恒，凶。"], // 风雷益
+  43: ["壮于前趾，往不胜为咎。","惕号，莫夜有戎，勿恤。","壮于頄，有凶。君子夬夬，独行，遇雨，若濡，有愠，无咎。","臀无肤，其行次且。牵羊悔亡，闻言不信。","苋陆夬夬，中行无咎。","无号，终有凶。"], // 泽天夬
+  44: ["系于金柅，贞吉，有攸往，见凶，羸豕孚踟躅。","包有鱼，无咎，不利宾。","臀无肤，其行次且，厉，无大咎。","包无鱼，起凶。","以杞包瓜，含章，有陨自天。九五：以杞包瓜，含章，有陨自天。","姤其角，吝，无咎。"], // 天风姤
+  45: ["有孚不终，乃乱乃萃，若号一握为笑，勿恤，往无咎。","引吉，无咎，孚乃利用禴。","萃如，嗟如，无攸利，往无咎，小吝。","大吉，无咎。","萃有位，无咎。匪孚，元永贞，悔亡。","赍咨涕洟，无咎。"], // 泽地萃
+  46: ["允升，大吉。","孚乃利用禴，无咎。","升虚邑。","王用亨于岐山，吉无咎。","贞吉，升阶。","冥升，利于不息之贞。"], // 地风升
+  47: ["臀困于株木，入于幽谷，三岁不觌。","困于酒食，朱绂方来，利用享祀，征凶，无咎。","困于石，据于蒺藜，入于其宫，不见其妻，凶。","来徐徐，困于金车，吝，有终。","劓刖，困于赤绂，乃徐有说，利用祭祀。","困于葛藟，于臲卼，曰动悔。有悔，征吉。"], // 泽水困
+  48: ["井泥不食，旧井无禽。","井谷射鲋，瓮敝漏。","井渫不食，为我心恻，可用汲，王明，并受其福。","井甃，无咎。","井冽，寒泉食。","井收勿幕，有孚元吉。"], // 水风井
+  49: ["巩用黄牛之革。","巳日乃革之，征吉，无咎。","征凶，贞厉，革言三就，有孚。","悔亡，有孚改命，吉。","大人虎变，未占有孚。","君子豹变，小人革面，征凶，居贞吉。"], // 泽火革
+  50: ["鼎颠趾，利出否，得妾以其子，无咎。","鼎有实，我仇有疾，不我能即，吉。","鼎耳革，其行塞，雉膏不食，方雨亏悔，终吉。","鼎折足，覆公餗，其形渥，凶。","鼎黄耳，金铉，利贞。","鼎玉铉，大吉，无不利。"], // 火风鼎
+  51: ["震来虩虩，后笑言哑哑，吉。","震来厉，亿丧贝，跻于九陵，勿逐，七日得。","震苏苏，震行无眚。","震遂泥。","震往来厉，亿无丧，有事。","震索索，视矍矍，征凶。震不于其躬，于其邻，无咎。婚媾有言。"], // 震为雷
+  52: ["艮其趾，无咎，利永贞。","艮其腓，不拯其随，其心不快。","艮其限，列其夤，厉薰心。","艮其身，无咎。","艮其辅，言有序，悔亡。","敦艮，吉。"], // 艮为山
+  53: ["鸿渐于干，小子厉，有言，无咎。","鸿渐于磐，饮食衎衎，吉。","鸿渐于陆，夫征不复，妇孕不育，凶；利御寇。","鸿渐于木，或得其桷，无咎。","鸿渐于陵，妇三岁不孕，终莫之胜，吉。","鸿渐于陆，其羽可用为仪，吉。"], // 风山渐
+  54: ["归妹以娣，跛能履，征吉。","眇能视，利幽人之贞。","归妹以须，反归以娣。","归妹愆期，迟归有时。","帝乙归妹，其君之袂，不如其娣之袂良，月几望，吉。","女承筐无实，士刲羊无血，无攸利。"], // 雷泽归妹
+  55: ["遇其配主，虽旬无咎，往有尚。","丰其蔀，日中见斗，往得疑疾，有孚发若，吉。","丰其沛，日中见沫，折其右肱，无咎。","丰其蔀，日中见斗，遇其夷主，吉。","来章，有庆誉，吉。","丰其屋，蔀其家，闚其户，阒其无人，三岁不觌，凶。"], // 雷火丰
+  56: ["旅琐琐，斯其所取灾。","旅即次，怀其资，得童仆贞。","旅焚其次，丧其童仆，贞厉。","旅于处，得其资斧，我心不快。","射雉一矢亡，终以誉命。","鸟焚其巢，旅人先笑后号啕。丧牛于易，凶。"], // 火山旅
+  57: ["进退，利武人之贞。","巽在床下，用史巫纷若，吉，无咎。","频巽，吝。","悔亡，田获三品。","贞吉悔亡，无不利。无初有终，先庚三日，后庚三日，吉。","巽在床下，丧其资斧，贞凶。"], // 巽为风
+  58: ["和兑，吉。","孚兑，吉，悔亡。","来兑，凶。","商兑，未宁，介疾有喜。","孚于剥，有厉。","引兑。"], // 兑为泽
+  59: ["用拯马壮，吉。","涣奔其机，悔亡。","涣其躬，无悔。","涣其群，元吉。涣有丘，匪夷所思。","涣汗其大号，涣王居，无咎。","涣其血，去逖出，无咎。"], // 风水涣
+  60: ["不出户庭，无咎。","不出门庭，凶。","不节若，则嗟若，无咎。","安节，亨。","甘节，吉；往有尚。","苦节，贞凶，悔亡。"], // 水泽节
+  61: ["虞吉，有它不燕。","鸣鹤在阴，其子和之，我有好爵，吾与尔靡之。","得敌，或鼓或罢，或泣或歌。","月几望，马匹亡，无咎。","有孚挛如，无咎。","翰音登于天，贞凶。"], // 风泽中孚
+  62: ["飞鸟以凶。","过其祖，遇其妣；不及其君，遇其臣；无咎。","弗过防之，从或戕之，凶。","无咎，弗过遇之。往厉必戒，勿用永贞。","密云不雨，自我西郊，公弋取彼在穴。","弗遇过之，飞鸟离之，凶，是谓灾眚。"], // 雷山小过
+  63: ["曳其轮，濡其尾，无咎。","妇丧其茀，勿逐，七日得。","高宗伐鬼方，三年克之，小人勿用。","繻有衣袽，终日戒。","东邻杀牛，不如西邻之禴祭，实受其福。","濡其首，厉。"], // 水火既济
+  64: ["濡其尾，吝。","曳其轮，贞吉。","未济，征凶，利涉大川。","贞吉，悔亡，震用伐鬼方，三年有赏于大国。","贞吉，无悔，君子之光，有孚，吉。","有孚于饮酒，无咎，濡其首，有孚失是。"], // 火水未济
+};
+
+const YONG_TEXTS = {
+  1: "见群龙无首，吉。",
+  2: "利永贞。"
+};
+
+function yaoTexts(no) { return YAO_TEXTS[no] || []; }
+function yongText(no) { return YONG_TEXTS[no] || ''; }
+
+module.exports = {
+  YAO_TEXTS: YAO_TEXTS,
+  YONG_TEXTS: YONG_TEXTS,
+  yaoTexts: yaoTexts,
+  yongText: yongText
 };
 
 });
@@ -2373,27 +2731,23 @@ Page({
 });
 __def('pages/result/result.js', function(module, exports, require){
 __cur = "pages/result/result";
-const hexagrams = require('../../utils/hexagrams.js');
+const duanzhan = require('../../utils/duanzhan.js');
 const store = require('../../utils/store.js');
 
-const LABELS = ['初', '二', '三', '四', '五', '上'];
-
+// 成卦结果页：断占总结（三行） / 本卦 / 变卦
+// 全部展示数据由 utils/duanzhan.js 从六爻营数重算，历史占例无需迁移
 Page({
   data: {
     ready: false,
     fromHistory: false,
     saved: false,
-    lines: [],
-    hexName: '',
-    shortName: '',
-    upper: '',
-    lower: '',
-    judgment: '',
-    hasChange: false,
-    changeText: '',
-    changedName: '',
-    changedJudgment: '',
-    timeText: ''
+    summaryLines: [],
+    ben: null,
+    bian: null,
+    timeText: '',
+    question: '',
+    asking: false,
+    questionInput: ''
   },
 
   onLoad: function (options) {
@@ -2419,47 +2773,47 @@ Page({
 
   render: function (session) {
     const values = session.values || [];
-    const hex = session.hex || hexagrams.buildHexagram(values);
-    const lines = [];
-    for (let i = 5; i >= 0; i--) {
-      const v = values[i];
-      const info = v === 6 ? { yang: false, symbol: '⚋' }
-        : v === 9 ? { yang: true, symbol: '⚊' }
-          : v === 8 ? { yang: false, symbol: '⚋' }
-            : { yang: true, symbol: '⚊' };
-      lines.push({
-        label: LABELS[i],
-        yang: info.yang,
-        changing: v === 6 || v === 9,
-        valueText: v + ' ' + info.symbol
-      });
-    }
-
-    const changed = session.changed;
+    const result = duanzhan.buildResult(values);
     this.setData({
       ready: true,
-      lines: lines,
-      hexName: hex.name,
-      shortName: hex.shortName,
-      upper: hex.upperSymbol + ' ' + hex.upper + '（上）',
-      lower: hex.lowerSymbol + ' ' + hex.lower + '（下）',
-      judgment: hex.judgment,
-      hasChange: !!changed,
-      changeText: (session.changeLabels || []).join('、'),
-      changedName: changed ? changed.name : '',
-      changedJudgment: changed ? changed.judgment : '',
-      timeText: store.formatTime(session.createdAt)
+      summaryLines: result.summaryLines,
+      ben: result.ben,
+      bian: result.bian,
+      timeText: store.formatTime(session.createdAt),
+      question: (session.question || '').trim()
     });
   },
 
+  // 保存前先问所占事项；用页面内弹层而不是 wx.showModal(editable)，
+  // 因为 Android WebView 默认不显示 prompt/confirm 类原生对话框。
   onSave: function () {
+    if (!this.session || this.data.saved) return;
+    this.setData({
+      asking: true,
+      questionInput: (this.session.question || '').trim()
+    });
+  },
+
+  onQuestionInput: function (e) {
+    this.setData({ questionInput: (e.detail && e.detail.value) || '' });
+  },
+
+  onCancelAsk: function () {
+    this.setData({ asking: false });
+  },
+
+  noop: function () {},
+
+  onConfirmAsk: function () {
     if (!this.session) return;
+    const q = (this.data.questionInput || '').trim();
+    this.session.question = q;
     const res = store.save(this.session);
     if (res.error) {
       wx.showToast({ title: '保存失败，请重试', icon: 'none' });
       return;
     }
-    this.setData({ saved: true });
+    this.setData({ asking: false, saved: true, question: q });
     wx.showToast({ title: '已存入占例', icon: 'success' });
   },
 
@@ -2498,6 +2852,7 @@ Page({
         shortName: hex.shortName || '',
         changedName: changed ? changed.name : '',
         changeText: (item.changeLabels || []).join('、'),
+        question: (item.question || '').trim(),
         timeText: store.formatTime(item.createdAt)
       };
     });

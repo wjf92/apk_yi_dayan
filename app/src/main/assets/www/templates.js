@@ -239,78 +239,214 @@ window.__T["pages/result/result"] = function (d) {
     __h0 += "</div>";
     __h0 += "<div" + " class=\""+"rule"+"\"" + ">";
     __h0 += "</div>";
-    __h0 += "<div" + " class=\""+"hex"+"\"" + ">";
-    __h0 += __each(lines, function(item, idx){ var __h1 = "";
-    __h1 += "<div" + " class=\""+"hex-line"+"\""+" data-wxk=\""+__E((item && item["label"] != null) ? item["label"] : idx)+"\"" + ">";
-    __h1 += "<span" + " class=\""+"hex-label"+"\"" + ">";
-    __h1 += __E(item.label);
+    __h0 += "<div" + " class=\""+"card verdict"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"verdict-k"+"\"" + ">";
+    __h0 += "断占总结";
+    __h0 += "</span>";
+    __h0 += __each(summaryLines, function(item, idx){ var __h1 = "";
+    __h1 += "<div" + " class=\""+"vline "+__E(item.last ? 'last' : '')+"\""+" data-wxk=\""+__E((item && item["key"] != null) ? item["key"] : idx)+"\"" + ">";
+    __h1 += "<span" + " class=\""+"vk"+"\"" + ">";
+    __h1 += __E(item.key);
     __h1 += "</span>";
-    __h1 += "<div" + " class=\""+"hex-bars"+"\"" + ">";
-    if (item.yang) {
-    __h1 += "<div" + " class=\""+"bar "+__E(item.changing ? 'changing' : '')+"\"" + ">";
-    __h1 += "</div>";
-    }
-    __h1 += "<div" + " class=\""+"yin"+"\"" + ">";
-    __h1 += "<div" + " class=\""+"bar half "+__E(item.changing ? 'changing' : '')+"\"" + ">";
-    __h1 += "</div>";
-    __h1 += "<div" + " class=\""+"bar half "+__E(item.changing ? 'changing' : '')+"\"" + ">";
-    __h1 += "</div>";
-    __h1 += "</div>";
-    __h1 += "</div>";
-    __h1 += "<span" + " class=\""+"hex-val"+"\"" + ">";
-    __h1 += __E(item.valueText);
+    __h1 += "<span" + " class=\""+"vt serif"+"\"" + ">";
+    __h1 += __E(item.text);
     __h1 += "</span>";
     __h1 += "</div>";
     return __h1; });
     __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"card"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"card-h"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"card-h-t"+"\"" + ">";
+    __h0 += "本卦";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"tag"+"\"" + ">";
+    __h0 += __E(ben.tag);
+    __h0 += "</span>";
+    __h0 += "</div>";
     __h0 += "<div" + " class=\""+"hex-head"+"\"" + ">";
     __h0 += "<div" + " class=\""+"seal serif"+"\"" + ">";
-    __h0 += __E(shortName);
+    __h0 += __E(ben.shortName);
     __h0 += "</div>";
     __h0 += "<span" + " class=\""+"hex-name serif"+"\"" + ">";
-    __h0 += __E(hexName);
+    __h0 += __E(ben.name);
     __h0 += "</span>";
     __h0 += "</div>";
     __h0 += "<div" + " class=\""+"trigrams"+"\"" + ">";
-    __h0 += __E(upper)+" · "+__E(lower);
+    __h0 += __E(ben.upper)+" · "+__E(ben.lower);
     __h0 += "</div>";
-    __h0 += "<div" + " class=\""+"juan"+"\"" + ">";
-    __h0 += "<span" + " class=\""+"juan-label"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"hr"+"\"" + ">";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"hex"+"\"" + ">";
+    __h0 += __each(ben.lines, function(item, idx){ var __h2 = "";
+    __h2 += "<div" + " class=\""+"hex-line "+__E(item.isYi ? 'yi' : '')+"\""+" data-wxk=\""+__E((item && item["label"] != null) ? item["label"] : idx)+"\"" + ">";
+    __h2 += "<span" + " class=\""+"hex-label"+"\"" + ">";
+    __h2 += __E(item.label);
+    __h2 += "</span>";
+    __h2 += "<div" + " class=\""+"hex-bars"+"\"" + ">";
+    if (item.yang) {
+    __h2 += "<div" + " class=\""+"bar "+__E(item.changing ? 'changing' : '')+"\"" + ">";
+    __h2 += "</div>";
+    }
+    if (!item.yang) {
+    __h2 += "<div" + " class=\""+"yin"+"\"" + ">";
+    __h2 += "<div" + " class=\""+"bar half "+__E(item.changing ? 'changing' : '')+"\"" + ">";
+    __h2 += "</div>";
+    __h2 += "<div" + " class=\""+"bar half "+__E(item.changing ? 'changing' : '')+"\"" + ">";
+    __h2 += "</div>";
+    __h2 += "</div>";
+    }
+    __h2 += "</div>";
+    __h2 += "<span" + " class=\""+"hex-val"+"\"" + ">";
+    __h2 += __E(item.valueText);
+    __h2 += "</span>";
+    __h2 += "<div" + " class=\""+"marks"+"\"" + ">";
+    if (item.changing) {
+    __h2 += "<span" + " class=\""+"mk change"+"\"" + ">";
+    __h2 += "变";
+    __h2 += "</span>";
+    }
+    if (item.isYi) {
+    __h2 += "<span" + " class=\""+"mk yi"+"\"" + ">";
+    __h2 += "宜";
+    __h2 += "</span>";
+    }
+    if (item.isMain) {
+    __h2 += "<span" + " class=\""+"mk main"+"\"" + ">";
+    __h2 += "主变数";
+    __h2 += "</span>";
+    }
+    __h2 += "</div>";
+    __h2 += "</div>";
+    return __h2; });
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"legend"+"\"" + ">";
+    __h0 += "<span>";
+    __h0 += "朱红＝变爻";
+    __h0 += "</span>";
+    __h0 += "<span>";
+    __h0 += "虚线＝宜变之爻";
+    __h0 += "</span>";
+    __h0 += "<span>";
+    __h0 += "主变数＝相值";
+    __h0 += "</span>";
+    __h0 += "</div>";
+    __h0 += "<span" + " class=\""+"lbl"+"\"" + ">";
     __h0 += "卦辞";
     __h0 += "</span>";
     __h0 += "<span" + " class=\""+"juan-text serif"+"\"" + ">";
-    __h0 += __E(judgment);
+    __h0 += __E(ben.judgment);
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"lbl"+"\"" + ">";
+    __h0 += "爻辞";
+    __h0 += "</span>";
+    __h0 += "<div" + " class=\""+"ylist"+"\"" + ">";
+    __h0 += __each(ben.yaoList, function(item, idx){ var __h3 = "";
+    __h3 += "<div" + " class=\""+"yline "+__E(item.isMain ? 'main' : '')+"\""+" data-wxk=\""+__E((item && item["title"] != null) ? item["title"] : idx)+"\"" + ">";
+    __h3 += "<span" + " class=\""+"yp"+"\"" + ">";
+    __h3 += __E(item.title);
+    __h3 += "</span>";
+    __h3 += "<span" + " class=\""+"yc serif"+"\"" + ">";
+    if (item.prefix) {
+    __h3 += "<span" + " class=\""+"prefix "+__E(item.isRef ? 'ref' : '')+"\"" + ">";
+    __h3 += __E(item.prefix);
+    __h3 += "</span>";
+    }
+    __h3 += __E(item.text);
+    __h3 += "</span>";
+    __h3 += "</div>";
+    return __h3; });
+    __h0 += "</div>";
+    __h0 += "</div>";
+    __h0 += "<div" + " class=\""+"card"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"card-h"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"card-h-t"+"\"" + ">";
+    __h0 += "变卦";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"tag"+"\"" + ">";
+    __h0 += __E(bian.tag);
     __h0 += "</span>";
     __h0 += "</div>";
-    if (hasChange) {
-    __h0 += "<div" + " class=\""+"change-card"+"\"" + ">";
-    __h0 += "<span" + " class=\""+"change-title"+"\"" + ">";
-    __h0 += "变爻："+__E(changeText);
+    if (bian.mode == 'none') {
+    __h0 += "<div" + " class=\""+"empty"+"\"" + ">";
+    __h0 += "<span>";
+    __h0 += "六爻皆静，之卦即本卦";
     __h0 += "</span>";
-    __h0 += "<div" + " class=\""+"change-to"+"\"" + ">";
-    __h0 += "<span" + " class=\""+"change-to-label"+"\"" + ">";
-    __h0 += "之卦";
-    __h0 += "</span>";
-    __h0 += "<span" + " class=\""+"change-to-name serif"+"\"" + ">";
-    __h0 += __E(changedName);
-    __h0 += "</span>";
-    __h0 += "</div>";
-    __h0 += "<span" + " class=\""+"change-judge serif"+"\"" + ">";
-    __h0 += __E(changedJudgment);
-    __h0 += "</span>";
-    __h0 += "<span" + " class=\""+"change-tip"+"\"" + ">";
-    __h0 += "有变爻时，兼看本卦与之卦，以变爻爻辞为断。";
+    __h0 += "<span>";
+    __h0 += "依本卦卦辞卦象占断即可";
     __h0 += "</span>";
     __h0 += "</div>";
     }
-    __h0 += "<div" + " class=\""+"change-card"+"\"" + ">";
-    __h0 += "<span" + " class=\""+"change-title"+"\"" + ">";
-    __h0 += "六爻皆不变";
+    if (bian.mode != 'none') {
+    __h0 += __each(bian.cards, function(card, idx){ var __h4 = "";
+    __h4 += "<div" + " class=\""+"subcard "+__E(card.primary ? 'primary' : '')+" "+__E(card.mute ? 'mute' : '')+"\""+" data-wxk=\""+__E((card && card["title"] != null) ? card["title"] : idx)+"\"" + ">";
+    __h4 += "<div" + " class=\""+"subcard-h"+"\"" + ">";
+    __h4 += "<span" + " class=\""+"sub-t"+"\"" + ">";
+    __h4 += __E(card.title);
+    __h4 += "</span>";
+    __h4 += "<span" + " class=\""+"badge"+"\"" + ">";
+    __h4 += __E(card.badge);
+    __h4 += "</span>";
+    __h4 += "</div>";
+    __h4 += "<div" + " class=\""+"subbody"+"\"" + ">";
+    __h4 += "<div" + " class=\""+"minihex"+"\"" + ">";
+    __h4 += __each(card.miniLines, function(item, idx){ var __h5 = "";
+    __h5 += "<div" + " class=\""+"mline"+"\""+" data-wxk=\""+__E((item && item["key"] != null) ? item["key"] : idx)+"\"" + ">";
+    if (item.yang) {
+    __h5 += "<div" + " class=\""+"mbar full "+__E(item.changed ? 'c' : '')+"\"" + ">";
+    __h5 += "</div>";
+    }
+    if (!item.yang) {
+    __h5 += "<div" + " class=\""+"mbar-h"+"\"" + ">";
+    __h5 += "<div" + " class=\""+"mbar half "+__E(item.changed ? 'c' : '')+"\"" + ">";
+    __h5 += "</div>";
+    __h5 += "<div" + " class=\""+"mbar half "+__E(item.changed ? 'c' : '')+"\"" + ">";
+    __h5 += "</div>";
+    __h5 += "</div>";
+    }
+    __h5 += "</div>";
+    return __h5; });
+    __h4 += "</div>";
+    __h4 += "<div" + " class=\""+"subtxt"+"\"" + ">";
+    __h4 += "<span" + " class=\""+"sub-nm serif"+"\"" + ">";
+    __h4 += __E(card.name);
+    __h4 += "</span>";
+    __h4 += "<span" + " class=\""+"slbl"+"\"" + ">";
+    __h4 += "卦辞";
+    __h4 += "</span>";
+    __h4 += "<span" + " class=\""+"sub-jc serif"+"\"" + ">";
+    __h4 += __E(card.judgment);
+    __h4 += "</span>";
+    __h4 += "</div>";
+    __h4 += "</div>";
+    __h4 += "<span" + " class=\""+"slbl"+"\"" + ">";
+    __h4 += "爻辞";
+    __h4 += "</span>";
+    __h4 += "<div" + " class=\""+"ylist"+"\"" + ">";
+    __h4 += __each(card.yaoList, function(item, idx){ var __h6 = "";
+    __h6 += "<div" + " class=\""+"yline "+__E(item.changed ? 'chg' : '')+"\""+" data-wxk=\""+__E((item && item["title"] != null) ? item["title"] : idx)+"\"" + ">";
+    __h6 += "<span" + " class=\""+"yp"+"\"" + ">";
+    __h6 += __E(item.title);
+    __h6 += "</span>";
+    __h6 += "<span" + " class=\""+"yc serif"+"\"" + ">";
+    __h6 += __E(item.text);
+    __h6 += "</span>";
+    __h6 += "</div>";
+    return __h6; });
+    __h4 += "</div>";
+    __h4 += "</div>";
+    return __h4; });
+    }
+    __h0 += "</div>";
+    if (question) {
+    __h0 += "<div" + " class=\""+"question-line"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"ql-k"+"\"" + ">";
+    __h0 += "所占事项";
     __h0 += "</span>";
-    __h0 += "<span" + " class=\""+"change-tip"+"\"" + ">";
-    __h0 += "之卦即本卦，依本卦卦辞为断。";
+    __h0 += "<span" + " class=\""+"ql-v serif"+"\"" + ">";
+    __h0 += __E(question);
     __h0 += "</span>";
     __h0 += "</div>";
+    }
     __h0 += "<div" + " class=\""+"time-line"+"\"" + ">";
     __h0 += __E(timeText);
     __h0 += "</div>";
@@ -325,6 +461,27 @@ window.__T["pages/result/result"] = function (d) {
     __h0 += "<button" + " class=\""+"btn ghost"+"\""+" data-ev=\""+"tap:onHistory"+"\"" + ">";
     __h0 += "查 看 历 史";
     __h0 += "</button>";
+    }
+    if (asking) {
+    __h0 += "<div" + " class=\""+"mask"+"\""+" data-ev=\""+"tap!:onCancelAsk"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"dialog"+"\""+" data-ev=\""+"tap!:noop"+"\"" + ">";
+    __h0 += "<span" + " class=\""+"dlg-t serif"+"\"" + ">";
+    __h0 += "所占事项";
+    __h0 += "</span>";
+    __h0 += "<span" + " class=\""+"dlg-d"+"\"" + ">";
+    __h0 += "写下本次所问之事，保存后可在占例中回看";
+    __h0 += "</span>";
+    __h0 += "<input" + " class=\""+"dlg-input"+"\""+" value=\""+__E(questionInput)+"\""+" placeholder=\""+"如：求职、出行、家宅……"+"\""+" maxlength=\""+"40"+"\""+" focus=\""+__E(asking)+"\""+" confirm-type=\""+"done"+"\""+" data-ev=\""+"input:onQuestionInput;confirm:onConfirmAsk"+"\"" + ">";
+    __h0 += "<div" + " class=\""+"dlg-btns"+"\"" + ">";
+    __h0 += "<button" + " class=\""+"dlg-btn ghost"+"\""+" data-ev=\""+"tap!:onCancelAsk"+"\"" + ">";
+    __h0 += "取 消";
+    __h0 += "</button>";
+    __h0 += "<button" + " class=\""+"dlg-btn"+"\""+" data-ev=\""+"tap!:onConfirmAsk"+"\"" + ">";
+    __h0 += "保 存";
+    __h0 += "</button>";
+    __h0 += "</div>";
+    __h0 += "</div>";
+    __h0 += "</div>";
     }
     __h0 += "</div>";
     return __h0;
@@ -361,6 +518,11 @@ window.__T["pages/history/history"] = function (d) {
     __h1 += "<span" + " class=\""+"item-name serif"+"\"" + ">";
     __h1 += __E(item.name);
     __h1 += "</span>";
+    if (item.question) {
+    __h1 += "<span" + " class=\""+"item-q"+"\"" + ">";
+    __h1 += "所占 · "+__E(item.question);
+    __h1 += "</span>";
+    }
     if (item.changedName) {
     __h1 += "<span" + " class=\""+"item-sub"+"\"" + ">";
     __h1 += "之卦 "+__E(item.changedName);

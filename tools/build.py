@@ -6,6 +6,7 @@
 用法：python3 tools/build.py
 """
 import os
+import re
 import sys
 import stat
 import shutil
@@ -58,6 +59,17 @@ def main():
     for p in (AAPT2, ZIPALIGN, APKSIGNER):
         executable(p)
 
+    # 版本信息以 AndroidManifest.xml 为唯一来源；aapt2 link 的 --version-code
+    # 会覆盖 manifest，这里读出来传回去，避免升级时版本号始终停在 1。
+    manifest_xml = open(MANIFEST, encoding='utf-8').read()
+    m = re.search(r'android:versionCode="(\d+)"', manifest_xml)
+    version_code = m.group(1) if m else '1'
+    m = re.search(r'android:versionName="([^"]+)"', manifest_xml)
+    version_name = m.group(1) if m else '1.0'
+    print('\n版本 %s (code %s) · 签名密钥 %s' % (version_name, version_code, os.path.basename(KS)))
+    if not os.path.exists(KS):
+        print('      注意：首次生成密钥；后续升级务必沿用同一密钥，否则必须卸载重装')
+
     print('\n[1/8] 转换小程序为 WebView 应用')
     run([sys.executable, os.path.join(TOOLS, 'convert.py')], quiet=True)
 
@@ -80,7 +92,7 @@ def main():
     run([AAPT2, 'link', '-o', base_apk, '-I', ANDROID_JAR,
          '--manifest', MANIFEST, '-A', ASSETS, '-R', flat, '--auto-add-overlay',
          '--min-sdk-version', '21', '--target-sdk-version', '30',
-         '--version-code', '1', '--version-name', '1.0'], quiet=True)
+         '--version-code', version_code, '--version-name', version_name], quiet=True)
 
     print('\n[3/8] javac 编译 MainActivity')
     run(['javac', '-source', '8', '-target', '8', '-classpath', ANDROID_JAR,

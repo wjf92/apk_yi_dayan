@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.wjf.dayan"
-    android:versionCode="1"
-    android:versionName="1.0">
+    android:versionCode="2"
+    android:versionName="1.1">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="30" />
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- allowBackup 保持开启：占例存于 app 私有 files/，覆盖安装不清数据，
+         并随系统备份/换机恢复。升级请直接覆盖安装，勿先卸载；签名密钥须沿用 dayan.jks。 -->
     <application
         android:allowBackup="true"
         android:label="大衍占筮"
